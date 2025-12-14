@@ -1,0 +1,27 @@
+[project]
+name = "rag-local-llm"
+version = "0.1.0"
+description = "RAG system with local LLM using Ollama"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "langchain>=0.3.0",
+    "langchain-community>=0.3.0",
+    "langchain-text-splitters>=0.3.0",
+    "langchain-core>=0.3.0",
+    "chromadb>=0.4.22",
+    "pypdf>=3.17.0",
+    "python-multipart>=0.0.6",
+    "ollama>=0.1.0",
+    "unstructured>=0.10.0",
+    "markdown>=3.5.0",
+    "requests>=2.31.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+]
