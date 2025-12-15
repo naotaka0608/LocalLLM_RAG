@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local LLM RAG System</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Local LLM RAG System</h1>
+            <p>Powered by Ollama, LangChain & FastAPI</p>
+        </div>
+
+        <div class="main-tabs">
+            <button class="main-tab active" onclick="switchMainTab('chat')">💬 チャット</button>
+            <button class="main-tab" onclick="switchMainTab('settings')">⚙️ 設定</button>
+        </div>
+
+        <div id="chat-main" class="main-tab-content active">
+            <div class="card">
+                <h2>チャット</h2>
+                <div style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 8px; display: flex; align-items: center; gap: 10px;">
+                    <label style="font-weight: 600; color: #333; white-space: nowrap;">モデル:</label>
+                    <select id="modelSelect" style="flex: 1; padding: 8px; border-radius: 5px; border: 2px solid #e0e0e0; font-size: 0.95rem;">
+                        <option value="">デフォルト (llama3.2)</option>
+                    </select>
+                </div>
+                <div class="chat-area">
+                    <div class="chat-messages" id="chatMessages">
+                        <div class="message assistant">
+                            <div class="message-header">アシスタント</div>
+                            <div>こんにちは！ファイルをアップロードして、質問してください。</div>
+                        </div>
+                    </div>
+                    <div class="input-area">
+                        <input
+                            type="text"
+                            id="questionInput"
+                            placeholder="質問を入力してください..."
+                            onkeypress="handleKeyPress(event)"
+                        >
+                        <button class="btn btn-primary" onclick="sendQuestion()">送信</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="settings-main" class="main-tab-content">
+            <div class="settings-grid">
+                <div class="card">
+                    <h2>📄 ドキュメント管理</h2>
+                    <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+                        <div class="upload-icon">📄</div>
+                        <p>クリックまたはドラッグ＆ドロップ</p>
+                        <p style="font-size: 0.85rem; color: #666; margin-top: 5px;">対応: PDF, TXT, MD, CSV</p>
+                        <input type="file" id="fileInput" accept=".pdf,.txt,.md,.csv" multiple onchange="uploadFiles()">
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>📚 登録済みドキュメント</h2>
+                    <ul class="document-list" id="documentList">
+                        <li style="text-align: center; color: #999;">ドキュメントなし</li>
+                    </ul>
+                    <button class="btn btn-danger" onclick="clearDocuments()" style="width: 100%; margin-top: 10px;">
+                        全て削除
+                    </button>
+                </div>
+
+                <div class="card">
+                    <h2>🤖 モデル設定</h2>
+                    <select id="modelSelectSettings" style="width: 100%; padding: 10px; border-radius: 5px; border: 2px solid #e0e0e0; font-size: 0.95rem; margin-bottom: 10px;">
+                        <option value="">デフォルト (llama3.2)</option>
+                    </select>
+                    <button onclick="loadModels()" style="width: 100%; padding: 8px 12px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 0.9rem;">
+                        🔄 モデル再読み込み
+                    </button>
+                    <div id="modelCount" style="font-size: 0.85rem; color: #666; margin-top: 10px;"></div>
+                </div>
+
+                <div class="card">
+                    <h2>⚙️ システム状態</h2>
+                    <div id="healthStatus">確認中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/script.js"></script>
+</body>
+</html>

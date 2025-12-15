@@ -18,6 +18,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 静的ファイルのマウント（CSS, JS）
+app.mount("/css", StaticFiles(directory="frontend/css"), name="css")
+app.mount("/js", StaticFiles(directory="frontend/js"), name="js")
+
 # RAGサービスのインスタンス化
 rag_service = RAGService()
 
@@ -40,7 +44,7 @@ class ModelListResponse(BaseModel):
 @app.get("/")
 async def read_root():
     """HTMLフロントエンドを返す"""
-    return FileResponse("index.html")
+    return FileResponse("frontend/index.html")
 
 
 @app.post("/upload")
