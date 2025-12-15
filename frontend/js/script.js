@@ -358,10 +358,10 @@ function addMessage(sender, text, type = 'assistant', sources = null) {
         html += `
             <div class="sources">
                 <div class="sources-title" onclick="toggleSources('${sourceId}')">
-                    <span class="sources-toggle" id="${sourceId}-toggle">▼</span>
+                    <span class="sources-toggle collapsed" id="${sourceId}-toggle">▼</span>
                     参照元 (${sources.length}件)
                 </div>
-                <div class="sources-list" id="${sourceId}">
+                <div class="sources-list collapsed" id="${sourceId}">
                     ${sources.map(s => `<div>• ${s}</div>`).join('')}
                 </div>
             </div>
