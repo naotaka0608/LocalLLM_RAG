@@ -30,11 +30,142 @@ function renderChatHistory() {
     }
 
     historyDiv.innerHTML = chatHistory.map(chat => `
-        <div class="history-item ${chat.id === currentChatId ? 'active' : ''}" onclick="loadChat('${chat.id}')">
-            <div class="history-item-title">${chat.title}</div>
-            <div class="history-item-date">${new Date(chat.date).toLocaleString('ja-JP', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'})}</div>
+        <div class="history-item ${chat.id === currentChatId ? 'active' : ''}" data-chat-id="${chat.id}">
+            <div class="history-item-content">
+                <div class="history-item-title" title="ダブルクリックで編集">${escapeHtml(chat.title)}</div>
+                <div class="history-item-date">${new Date(chat.date).toLocaleString('ja-JP', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'})}</div>
+            </div>
+            <button class="history-item-delete" title="削除">×</button>
         </div>
     `).reverse().join('');
+
+    // イベントリスナーを設定
+    setupHistoryEventListeners();
+}
+
+// 履歴項目のイベントリスナーを設定
+function setupHistoryEventListeners() {
+    const historyItems = document.querySelectorAll('.history-item');
+
+    historyItems.forEach(item => {
+        const chatId = item.dataset.chatId;
+        const content = item.querySelector('.history-item-content');
+        const title = item.querySelector('.history-item-title');
+        const deleteBtn = item.querySelector('.history-item-delete');
+
+        // クリックでチャットを読み込む
+        content.addEventListener('click', (e) => {
+            // 編集中の入力フィールドがクリックされた場合は無視
+            if (e.target.tagName === 'INPUT') return;
+            loadChat(chatId);
+        });
+
+        // ダブルクリックでタイトル編集
+        title.addEventListener('dblclick', (e) => {
+            e.stopPropagation();
+            editChatTitle(chatId);
+        });
+
+        // 削除ボタン
+        deleteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteChat(chatId);
+        });
+    });
+}
+
+// HTMLエスケープ
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// チャットタイトルを編集
+function editChatTitle(chatId) {
+    const chat = chatHistory.find(c => c.id === chatId);
+    if (!chat) return;
+
+    // タイトル要素を探す
+    const historyItem = document.querySelector(`.history-item[data-chat-id="${chatId}"]`);
+    if (!historyItem) return;
+
+    const titleElement = historyItem.querySelector('.history-item-title');
+    if (!titleElement) return;
+
+    const currentTitle = chat.title;
+
+    // 入力フィールドを作成
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = currentTitle;
+    input.className = 'history-item-title-input';
+
+    // 入力フィールドに置き換え
+    titleElement.replaceWith(input);
+    input.focus();
+    input.select();
+
+    // 保存処理
+    const saveTitle = () => {
+        const newTitle = input.value.trim();
+
+        if (newTitle && newTitle !== currentTitle) {
+            chat.title = newTitle;
+            saveChatHistory();
+        }
+
+        renderChatHistory();
+    };
+
+    // Enterキーで保存
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            saveTitle();
+        } else if (e.key === 'Escape') {
+            renderChatHistory(); // キャンセル
+        }
+    });
+
+    // フォーカスが外れたら保存
+    input.addEventListener('blur', saveTitle);
+
+    // クリックイベントの伝播を防ぐ
+    input.addEventListener('click', (e) => e.stopPropagation());
+}
+
+// 個別のチャットを削除
+function deleteChat(chatId) {
+    if (!confirm('このチャットを削除しますか？')) {
+        return;
+    }
+
+    // 履歴から削除
+    chatHistory = chatHistory.filter(chat => chat.id !== chatId);
+
+    // 削除したチャットが現在表示中の場合、新規チャットを作成
+    if (currentChatId === chatId) {
+        createNewChat();
+    } else {
+        saveChatHistory();
+        renderChatHistory();
+    }
+}
+
+// 全ての履歴を削除
+function clearAllHistory() {
+    if (chatHistory.length === 0) {
+        alert('削除する履歴がありません。');
+        return;
+    }
+
+    if (!confirm(`全ての履歴（${chatHistory.length}件）を削除しますか？\nこの操作は取り消せません。`)) {
+        return;
+    }
+
+    chatHistory = [];
+    localStorage.removeItem('chatHistory');
+    createNewChat(); // 新規チャットを作成
 }
 
 // 新規チャット作成
