@@ -3,6 +3,134 @@
 // 別PCから: http://[サーバーのIPアドレス]:8000
 const API_BASE_URL = window.location.origin;
 
+// チャット履歴管理
+let chatHistory = [];
+let currentChatId = null;
+
+// LocalStorageから履歴を読み込む
+function loadChatHistory() {
+    const saved = localStorage.getItem('chatHistory');
+    if (saved) {
+        chatHistory = JSON.parse(saved);
+    }
+    renderChatHistory();
+}
+
+// 履歴を保存
+function saveChatHistory() {
+    localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+}
+
+// 履歴を表示
+function renderChatHistory() {
+    const historyDiv = document.getElementById('chatHistory');
+    if (chatHistory.length === 0) {
+        historyDiv.innerHTML = '<div style="padding: 20px; text-align: center; color: #999; font-size: 0.85rem;">履歴がありません</div>';
+        return;
+    }
+
+    historyDiv.innerHTML = chatHistory.map(chat => `
+        <div class="history-item ${chat.id === currentChatId ? 'active' : ''}" onclick="loadChat('${chat.id}')">
+            <div class="history-item-title">${chat.title}</div>
+            <div class="history-item-date">${new Date(chat.date).toLocaleString('ja-JP', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'})}</div>
+        </div>
+    `).reverse().join('');
+}
+
+// 新規チャット作成
+function createNewChat() {
+    const chatId = 'chat_' + Date.now();
+    const newChat = {
+        id: chatId,
+        title: '新しいチャット',
+        date: new Date().toISOString(),
+        messages: []
+    };
+
+    chatHistory.push(newChat);
+    currentChatId = chatId;
+
+    // チャットエリアをクリア
+    document.getElementById('chatMessages').innerHTML = `
+        <div class="message assistant">
+            <div class="message-header">アシスタント</div>
+            <div>
+                <p style="font-size: 0.95rem;">こんにちは！ファイルをアップロードして、質問してください。</p>
+                <div style="margin-top: 8px; padding: 8px; background: #f0f8ff; border-left: 3px solid #667eea; border-radius: 5px; font-size: 0.85rem;">
+                    <strong>💡 より精度の高い回答を得るコツ:</strong>
+                    <ul style="margin: 5px 0 0 18px; padding: 0;">
+                        <li>具体的で明確な質問をする（例: 「○○の手順を教えてください」）</li>
+                        <li>コンテキストを含める（例: 「Pythonで○○する方法」）</li>
+                        <li>ドキュメント内の用語を使う（専門用語や正式名称）</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    `;
+
+    saveChatHistory();
+    renderChatHistory();
+}
+
+// チャットを読み込む
+function loadChat(chatId) {
+    const chat = chatHistory.find(c => c.id === chatId);
+    if (!chat) return;
+
+    currentChatId = chatId;
+
+    // メッセージを復元
+    const messagesDiv = document.getElementById('chatMessages');
+    messagesDiv.innerHTML = chat.messages.map(msg => {
+        let html = `
+            <div class="message ${msg.type}">
+                <div class="message-header">${msg.sender}</div>
+                <div>${msg.text}</div>
+        `;
+
+        if (msg.sources && msg.sources.length > 0) {
+            const sourceId = 'sources-' + Date.now() + Math.random();
+            html += `
+                <div class="sources">
+                    <div class="sources-title" onclick="toggleSources('${sourceId}')">
+                        <span class="sources-toggle collapsed" id="${sourceId}-toggle">▼</span>
+                        参照元 (${msg.sources.length}件)
+                    </div>
+                    <div class="sources-list collapsed" id="${sourceId}">
+                        ${msg.sources.map(s => `<div>• ${s}</div>`).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        html += '</div>';
+        return html;
+    }).join('');
+
+    renderChatHistory();
+}
+
+// 現在のチャットにメッセージを保存
+function saveMessageToHistory(sender, text, type, sources = null) {
+    if (!currentChatId) {
+        createNewChat();
+    }
+
+    const chat = chatHistory.find(c => c.id === currentChatId);
+    if (!chat) return;
+
+    chat.messages.push({ sender, text, type, sources });
+
+    // 最初のユーザーメッセージをタイトルにする
+    if (type === 'user' && chat.messages.filter(m => m.type === 'user').length === 1) {
+        chat.title = text.substring(0, 30) + (text.length > 30 ? '...' : '');
+    }
+
+    chat.date = new Date().toISOString();
+    saveChatHistory();
+    renderChatHistory();
+}
+
 // メインタブ切り替え
 function switchMainTab(tabName) {
     // すべてのタブとタブコンテンツを取得
@@ -20,6 +148,8 @@ function switchMainTab(tabName) {
 
 // 初期化
 async function init() {
+    loadChatHistory();
+    createNewChat(); // 初回は新規チャット作成
     await checkHealth();
     await loadDocuments();
     await loadModels();
@@ -371,6 +501,9 @@ function addMessage(sender, text, type = 'assistant', sources = null) {
     messageDiv.innerHTML = html;
     messagesDiv.appendChild(messageDiv);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+    // 履歴に保存
+    saveMessageToHistory(sender, text, type, sources);
 }
 
 // 参照元の開閉
