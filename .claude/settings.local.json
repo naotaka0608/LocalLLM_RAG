@@ -3,7 +3,9 @@
     "allow": [
       "Bash(curl:*)",
       "Bash(mkdir:*)",
-      "Bash(uv run:*)"
+      "Bash(uv run:*)",
+      "Bash(ollama list:*)",
+      "Bash(ollama pull:*)"
     ]
   }
 }
