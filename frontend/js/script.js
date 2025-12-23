@@ -376,8 +376,11 @@ async function loadModels() {
         // 現在選択されているモデルを保存
         const currentValue = selectElement.value;
 
+        // デフォルトモデル名を取得（バックエンドから返される）
+        const defaultModelName = data.default_model || 'llama3.2';
+
         // モデルオプションHTMLを構築
-        let optionsHTML = '<option value="">デフォルト (llama3.2)</option>';
+        let optionsHTML = `<option value="">デフォルト (${defaultModelName})</option>`;
 
         // 取得したモデルを追加
         if (data.models && data.models.length > 0) {

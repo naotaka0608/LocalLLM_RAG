@@ -39,6 +39,7 @@ class QueryResponse(BaseModel):
 
 class ModelListResponse(BaseModel):
     models: List[str]
+    default_model: str
 
 
 @app.get("/")
@@ -151,7 +152,7 @@ async def list_models():
     """
     try:
         models = rag_service.get_available_models()
-        return ModelListResponse(models=models)
+        return ModelListResponse(models=models, default_model=rag_service.model_name)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

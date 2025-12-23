@@ -18,7 +18,7 @@ from langchain_core.runnables import RunnablePassthrough
 class RAGService:
     def __init__(
         self,
-        model_name: str = "llama3.2",
+        model_name: str = None,
         embedding_model: str = "nomic-embed-text",
         persist_directory: str = "./chroma_db"
     ):
@@ -26,10 +26,21 @@ class RAGService:
         RAGサービスの初期化
 
         Args:
-            model_name: Ollamaで使用するLLMモデル名
+            model_name: Ollamaで使用するLLMモデル名（Noneの場合は利用可能な最初のモデルを使用）
             embedding_model: Ollamaで使用する埋め込みモデル名
             persist_directory: ChromaDBの永続化ディレクトリ
         """
+        # model_nameがNoneの場合、利用可能なモデルの最初のものを使用
+        if model_name is None:
+            available_models = self._get_available_models_static()
+            if available_models:
+                model_name = available_models[0]
+                print(f"[INFO] Using first available model: {model_name}")
+            else:
+                # フォールバック: モデルが見つからない場合
+                model_name = "gemma3:12b"
+                print(f"[WARNING] No models found, using fallback: {model_name}")
+
         self.model_name = model_name
         self.embedding_model = embedding_model
         self.persist_directory = persist_directory
@@ -175,7 +186,7 @@ class RAGService:
             回答と参照元のタプル
         """
         print(f"[DEBUG] Query received: {question}")
-        print(f"[DEBUG] Model: {model_name if model_name else 'default (llama3.2)'}")
+        print(f"[DEBUG] Model: {model_name if model_name else f'default ({self.model_name})'}")
         print(f"[DEBUG] Query expansion: {enable_query_expansion}")
 
         # クエリ拡張
@@ -203,8 +214,30 @@ class RAGService:
                 print(f"[DEBUG] Error searching with query '{query}': {e}")
 
         if len(all_docs_with_scores) == 0:
-            print("[DEBUG] No documents found in vector store. Please upload documents first.")
-            return "ドキュメントが登録されていません。まずファイルをアップロードしてください。", []
+            print("[DEBUG] No documents found in vector store. Responding without RAG context.")
+            # ドキュメントがない場合は、RAGなしでLLMに直接質問
+            # モデルの選択
+            if model_name:
+                llm = Ollama(
+                    model=model_name,
+                    base_url="http://localhost:11434",
+                    temperature=0.7
+                )
+            else:
+                llm = self.llm
+
+            # RAGなしのプロンプト
+            simple_prompt = f"""あなたは親切で知識豊富なアシスタントです。以下の質問に答えてください。
+
+質問: {question}
+
+回答:"""
+
+            print("[DEBUG] Generating answer without RAG context...")
+            answer = llm.invoke(simple_prompt)
+            print(f"[DEBUG] Answer generated: {len(answer)} characters")
+
+            return answer, []
 
         # スコアでソート(ChromaDBの場合、スコアが小さいほど類似度が高い)
         all_docs_with_scores.sort(key=lambda x: x[1])
@@ -387,6 +420,27 @@ class RAGService:
                 embedding_function=self.embeddings
             )
 
+    @staticmethod
+    def _get_available_models_static() -> List[str]:
+        """
+        利用可能なOllamaモデルの一覧を取得（静的メソッド）
+
+        Returns:
+            モデル名のリスト
+        """
+        try:
+            import requests
+            response = requests.get("http://localhost:11434/api/tags", timeout=2)
+            if response.status_code == 200:
+                data = response.json()
+                models = [model["name"] for model in data.get("models", [])]
+                return models
+            else:
+                return []
+        except Exception as e:
+            print(f"[DEBUG] Exception fetching models: {e}")
+            return []
+
     def check_ollama_connection(self) -> bool:
         """
         Ollamaへの接続をチェック
@@ -395,9 +449,12 @@ class RAGService:
             接続が成功した場合True
         """
         try:
-            self.llm.invoke("test")
-            return True
-        except Exception:
+            import requests
+            # Ollamaサーバーが起動しているかを確認（モデルの有無に関わらず）
+            response = requests.get("http://localhost:11434/api/tags", timeout=2)
+            return response.status_code == 200
+        except Exception as e:
+            print(f"[DEBUG] Ollama connection check failed: {e}")
             return False
 
     def get_available_models(self) -> List[str]:
@@ -407,17 +464,6 @@ class RAGService:
         Returns:
             モデル名のリスト
         """
-        try:
-            import requests
-            response = requests.get("http://localhost:11434/api/tags")
-            if response.status_code == 200:
-                data = response.json()
-                models = [model["name"] for model in data.get("models", [])]
-                print(f"Found {len(models)} models: {models}")  # デバッグ用
-                return models
-            else:
-                print(f"Error fetching models: status code {response.status_code}")
-                return []
-        except Exception as e:
-            print(f"Exception fetching models: {e}")
-            return []
+        models = self._get_available_models_static()
+        print(f"[DEBUG] Found {len(models)} models: {models}")
+        return models
