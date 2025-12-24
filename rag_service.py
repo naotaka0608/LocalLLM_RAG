@@ -57,11 +57,11 @@ class RAGService:
             embedding_function=self.embeddings
         )
 
-        # LLM
+        # LLM（temperature低めで高速化と一貫性向上）
         self.llm = Ollama(
             model=self.model_name,
             base_url="http://localhost:11434",
-            temperature=0.7
+            temperature=0.3
         )
 
         # Text Splitter（より大きなチャンクでコンテキストを保持）
@@ -172,15 +172,16 @@ class RAGService:
             print(f"[DEBUG] Query expansion failed: {e}, using original question only")
             return [question]
 
-    def query(self, question: str, k: int = 10, model_name: str = None, enable_query_expansion: bool = True) -> Tuple[str, List[str]]:
+    def query(self, question: str, k: int = 5, model_name: str = None, enable_query_expansion: bool = False, temperature: float = None) -> Tuple[str, List[str]]:
         """
         質問に対してRAGで回答を生成
 
         Args:
             question: 質問文
-            k: 最終的に使用する関連文書の数（デフォルト: 10）
+            k: 最終的に使用する関連文書の数（デフォルト: 5）
             model_name: 使用するモデル名（Noneの場合はデフォルトモデルを使用）
-            enable_query_expansion: クエリ拡張を有効にするか（デフォルト: True）
+            enable_query_expansion: クエリ拡張を有効にするか（デフォルト: False）
+            temperature: LLMの温度パラメータ（Noneの場合はデフォルト0.3を使用）
 
         Returns:
             回答と参照元のタプル
@@ -194,14 +195,13 @@ class RAGService:
 
         # 各クエリで検索を実行し、スコア付きでドキュメントを取得
         # より多くのドキュメントを取得してフィルタリング
-        initial_k = k * 3  # 最終的に必要な数の3倍を取得
+        initial_k = k * 2  # 最終的に必要な数の2倍を取得（高速化のため3倍→2倍に削減）
         all_docs_with_scores = []
         seen_content = set()  # 重複排除用
 
         for query in queries:
             try:
                 docs_with_scores = self.vectorstore.similarity_search_with_score(query, k=initial_k)
-                print(f"[DEBUG] Query '{query[:50]}...' retrieved {len(docs_with_scores)} documents")
 
                 for doc, score in docs_with_scores:
                     # 重複チェック(同じ内容のドキュメントを排除)
@@ -209,9 +209,11 @@ class RAGService:
                     if content_hash not in seen_content:
                         seen_content.add(content_hash)
                         all_docs_with_scores.append((doc, score))
-                        print(f"[DEBUG] Document score: {score:.4f}, preview: {doc.page_content[:80]}...")
             except Exception as e:
                 print(f"[DEBUG] Error searching with query '{query}': {e}")
+
+        # 使用する温度を決定
+        effective_temperature = temperature if temperature is not None else 0.3
 
         if len(all_docs_with_scores) == 0:
             print("[DEBUG] No documents found in vector store. Responding without RAG context.")
@@ -221,10 +223,14 @@ class RAGService:
                 llm = Ollama(
                     model=model_name,
                     base_url="http://localhost:11434",
-                    temperature=0.7
+                    temperature=effective_temperature
                 )
             else:
-                llm = self.llm
+                llm = Ollama(
+                    model=self.model_name,
+                    base_url="http://localhost:11434",
+                    temperature=effective_temperature
+                )
 
             # RAGなしのプロンプト
             simple_prompt = f"""あなたは親切で知識豊富なアシスタントです。以下の質問に答えてください。
@@ -233,38 +239,15 @@ class RAGService:
 
 回答:"""
 
-            print("[DEBUG] Generating answer without RAG context...")
             answer = llm.invoke(simple_prompt)
-            print(f"[DEBUG] Answer generated: {len(answer)} characters")
-
             return answer, []
 
-        # スコアでソート(ChromaDBの場合、スコアが小さいほど類似度が高い)
+        # スコアでソート(ChromaDBの場合、スコアが小さいほど類似度が高い)して上位k件を選択
         all_docs_with_scores.sort(key=lambda x: x[1])
-
-        # スコアベースのフィルタリング
-        # 最高スコアの2倍以内のドキュメントのみを保持
-        if len(all_docs_with_scores) > 0:
-            best_score = all_docs_with_scores[0][1]
-            threshold = best_score * 2.0
-            filtered_docs = [(doc, score) for doc, score in all_docs_with_scores if score <= threshold]
-            print(f"[DEBUG] Filtered {len(all_docs_with_scores)} -> {len(filtered_docs)} documents (threshold: {threshold:.4f})")
-        else:
-            filtered_docs = all_docs_with_scores
-
-        # 上位k件を選択
-        top_docs = [doc for doc, _score in filtered_docs[:k]]
-        print(f"[DEBUG] Using top {len(top_docs)} documents for context")
-
-        # 取得したドキュメントの詳細をログ出力
-        for i, (doc, score) in enumerate(filtered_docs[:k]):
-            print(f"[DEBUG] Document {i+1} score: {score:.4f}")
-            print(f"[DEBUG] Document {i+1} preview: {doc.page_content[:100]}...")
-            print(f"[DEBUG] Document {i+1} metadata: {doc.metadata}")
+        top_docs = [doc for doc, _score in all_docs_with_scores[:k]]
 
         # コンテキストの構築
         context = "\n\n".join([doc.page_content for doc in top_docs])
-        print(f"[DEBUG] Context length: {len(context)} characters")
 
         # プロンプトの構築
         prompt_text = self.prompt.format(context=context, question=question)
@@ -274,15 +257,17 @@ class RAGService:
             llm = Ollama(
                 model=model_name,
                 base_url="http://localhost:11434",
-                temperature=0.7
+                temperature=effective_temperature
             )
         else:
-            llm = self.llm
+            llm = Ollama(
+                model=self.model_name,
+                base_url="http://localhost:11434",
+                temperature=effective_temperature
+            )
 
-        print("[DEBUG] Generating answer...")
         # 回答の生成
         answer = llm.invoke(prompt_text)
-        print(f"[DEBUG] Answer generated: {len(answer)} characters")
 
         # 参照元の抽出
         sources = []
@@ -293,37 +278,78 @@ class RAGService:
 
         return answer, list(set(sources))
 
-    async def query_stream(self, question: str, k: int = 10, model_name: str = None):
+    async def query_stream(self, question: str, k: int = 5, model_name: str = None, enable_query_expansion: bool = False, temperature: float = None):
         """
         質問に対してRAGで回答を生成（ストリーミング）
 
         Args:
             question: 質問文
-            k: 取得する関連文書の数
+            k: 取得する関連文書の数（デフォルト: 5）
             model_name: 使用するモデル名（Noneの場合はデフォルトモデルを使用）
+            enable_query_expansion: クエリ拡張を有効にするか（デフォルト: False）
+            temperature: LLMの温度パラメータ（Noneの場合はデフォルト0.3を使用）
 
         Yields:
             回答のチャンク
         """
-        # 関連文書の検索
-        retriever = self.vectorstore.as_retriever(search_kwargs={"k": k})
-        docs = retriever.invoke(question)
+        print(f"[DEBUG] Stream query received: {question}")
+        print(f"[DEBUG] Query expansion: {enable_query_expansion}")
 
-        # コンテキストの構築
-        context = "\n\n".join([doc.page_content for doc in docs])
+        # クエリ拡張
+        queries = self._expand_query(question) if enable_query_expansion else [question]
 
-        # プロンプトの構築
-        prompt_text = self.prompt.format(context=context, question=question)
+        # 各クエリで検索を実行
+        all_docs_with_scores = []
+        seen_content = set()
+
+        for query in queries:
+            try:
+                docs_with_scores = self.vectorstore.similarity_search_with_score(query, k=k * 2)
+                for doc, score in docs_with_scores:
+                    content_hash = hash(doc.page_content[:200])
+                    if content_hash not in seen_content:
+                        seen_content.add(content_hash)
+                        all_docs_with_scores.append((doc, score))
+            except Exception as e:
+                print(f"[DEBUG] Error searching with query '{query}': {e}")
+
+        # 使用する温度を決定
+        effective_temperature = temperature if temperature is not None else 0.3
 
         # モデルの選択
         if model_name:
             llm = Ollama(
                 model=model_name,
                 base_url="http://localhost:11434",
-                temperature=0.7
+                temperature=effective_temperature
             )
         else:
-            llm = self.llm
+            llm = Ollama(
+                model=self.model_name,
+                base_url="http://localhost:11434",
+                temperature=effective_temperature
+            )
+
+        # ドキュメントがない場合
+        if len(all_docs_with_scores) == 0:
+            simple_prompt = f"""あなたは親切で知識豊富なアシスタントです。以下の質問に答えてください。
+
+質問: {question}
+
+回答:"""
+            for chunk in llm.stream(simple_prompt):
+                yield chunk
+            return
+
+        # スコアでソートして上位を選択
+        all_docs_with_scores.sort(key=lambda x: x[1])
+        top_docs = [doc for doc, _score in all_docs_with_scores[:k]]
+
+        # コンテキストの構築
+        context = "\n\n".join([doc.page_content for doc in top_docs])
+
+        # プロンプトの構築
+        prompt_text = self.prompt.format(context=context, question=question)
 
         # ストリーミング生成
         for chunk in llm.stream(prompt_text):

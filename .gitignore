@@ -56,6 +56,9 @@ logs/
 .env.local
 .env.*.local
 
+# Settings
+settings.local.json
+
 # Testing
 .pytest_cache/
 .coverage

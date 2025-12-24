@@ -7,6 +7,12 @@ const API_BASE_URL = window.location.origin;
 let chatHistory = [];
 let currentChatId = null;
 
+// 性能設定
+let performanceSettings = {
+    temperature: 0.3,
+    documentCount: 5
+};
+
 // LocalStorageから履歴を読み込む
 function loadChatHistory() {
     const saved = localStorage.getItem('chatHistory');
@@ -369,12 +375,11 @@ async function loadModels() {
         const response = await fetch(`${API_BASE_URL}/models`);
         const data = await response.json();
 
-        // 両方のセレクトボックスを更新
-        const selectElement = document.getElementById('modelSelect');
+        // モデルセレクトボックスを更新
         const selectElementSettings = document.getElementById('modelSelectSettings');
 
         // 現在選択されているモデルを保存
-        const currentValue = selectElement.value;
+        const currentValue = selectElementSettings.value;
 
         // デフォルトモデル名を取得（バックエンドから返される）
         const defaultModelName = data.default_model || 'llama3.2';
@@ -391,20 +396,17 @@ async function loadModels() {
                 optionsHTML += `<option value="${model}">${model}</option>`;
             });
 
-            // 両方のセレクトボックスを更新
-            selectElement.innerHTML = optionsHTML;
+            // セレクトボックスを更新
             selectElementSettings.innerHTML = optionsHTML;
 
             // 以前の選択を復元
             if (currentValue) {
-                selectElement.value = currentValue;
                 selectElementSettings.value = currentValue;
             }
 
             modelCountDiv.innerHTML = `✓ ${data.models.length} 個のモデルが利用可能`;
             modelCountDiv.style.color = '#155724';
         } else {
-            selectElement.innerHTML = optionsHTML;
             selectElementSettings.innerHTML = optionsHTML;
 
             modelCountDiv.innerHTML = '⚠ モデルが見つかりません';
@@ -417,19 +419,6 @@ async function loadModels() {
     }
 }
 
-// モデル選択を同期
-document.addEventListener('DOMContentLoaded', function() {
-    const selectElement = document.getElementById('modelSelect');
-    const selectElementSettings = document.getElementById('modelSelectSettings');
-
-    selectElement.addEventListener('change', function() {
-        selectElementSettings.value = this.value;
-    });
-
-    selectElementSettings.addEventListener('change', function() {
-        selectElement.value = this.value;
-    });
-});
 
 // 通知を表示
 function showNotification(message, type = 'info') {
@@ -530,21 +519,42 @@ async function clearDocuments() {
 async function sendQuestion() {
     const input = document.getElementById('questionInput');
     const question = input.value.trim();
-    const modelSelect = document.getElementById('modelSelect');
+    const modelSelect = document.getElementById('modelSelectSettings');
     const selectedModel = modelSelect.value;
+    const queryExpansionToggle = document.getElementById('queryExpansionToggle');
+    const queryExpansion = queryExpansionToggle.checked;
 
     if (!question) return;
 
     addMessage('あなた', question, 'user');
     input.value = '';
 
-    // ローディングメッセージを追加
-    const loadingId = addLoadingMessage();
+    // 入力フィールドを無効化
+    input.disabled = true;
+    input.placeholder = '回答を生成中...';
+
+    // ストリーミング用のメッセージを追加（ローディング表示付き）
+    const messageId = 'streaming-' + Date.now();
+    const messagesDiv = document.getElementById('chatMessages');
+    const messageDiv = document.createElement('div');
+    messageDiv.id = messageId;
+    messageDiv.className = 'message assistant';
+    messageDiv.innerHTML = `
+        <div class="message-header">アシスタント</div>
+        <div class="streaming-content">
+            <div class="loading-spinner" style="display: inline-block; margin-right: 8px;"></div>
+            回答を生成中...
+        </div>
+    `;
+    messagesDiv.appendChild(messageDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
 
     try {
         const requestBody = {
             question,
-            stream: false
+            query_expansion: queryExpansion,
+            temperature: performanceSettings.temperature,
+            document_count: performanceSettings.documentCount
         };
 
         // モデルが選択されている場合のみ追加
@@ -552,7 +562,7 @@ async function sendQuestion() {
             requestBody.model = selectedModel;
         }
 
-        const response = await fetch(`${API_BASE_URL}/query`, {
+        const response = await fetch(`${API_BASE_URL}/query/stream`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -560,20 +570,52 @@ async function sendQuestion() {
             body: JSON.stringify(requestBody)
         });
 
-        const data = await response.json();
-
-        // ローディングメッセージを削除
-        removeLoadingMessage(loadingId);
-
-        if (response.ok) {
-            addMessage('アシスタント', data.answer, 'assistant', data.sources);
-        } else {
-            addMessage('システム', `エラー: ${data.detail}`, 'error');
+        if (!response.ok) {
+            throw new Error('ストリーミングエラー');
         }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let fullAnswer = '';
+        const contentDiv = messageDiv.querySelector('.streaming-content');
+        let isFirstChunk = true;
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value);
+            const lines = chunk.split('\n');
+
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const content = line.slice(6);
+
+                    // 最初のチャンクでローディング表示をクリア
+                    if (isFirstChunk && content) {
+                        contentDiv.textContent = '';
+                        isFirstChunk = false;
+                    }
+
+                    fullAnswer += content;
+                    contentDiv.textContent = fullAnswer;
+                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                }
+            }
+        }
+
+        // 履歴に保存
+        saveMessageToHistory('アシスタント', fullAnswer, 'assistant', null);
+
     } catch (error) {
-        // ローディングメッセージを削除
-        removeLoadingMessage(loadingId);
-        addMessage('システム', `エラー: ${error.message}`, 'error');
+        console.error('Error:', error);
+        const contentDiv = messageDiv.querySelector('.streaming-content');
+        contentDiv.textContent = `エラー: ${error.message}`;
+    } finally {
+        // 入力フィールドを再び有効化
+        input.disabled = false;
+        input.placeholder = '質問を入力してください...';
+        input.focus();
     }
 }
 
@@ -658,8 +700,90 @@ function handleKeyPress(event) {
     }
 }
 
+// 性能プリセットの適用
+function applyPerformancePreset() {
+    const preset = document.getElementById('performancePreset').value;
+    const descDiv = document.getElementById('presetDescription');
+    const advancedSettings = document.getElementById('advancedSettings');
+    const tempSlider = document.getElementById('temperatureSlider');
+    const docsSlider = document.getElementById('docsSlider');
+
+    let description = '';
+
+    switch(preset) {
+        case 'speed':
+            performanceSettings.temperature = 0.1;
+            performanceSettings.documentCount = 3;
+            description = '🚀 最速モード: 低temperature、少ないドキュメント検索で高速化';
+            advancedSettings.style.display = 'none';
+            break;
+        case 'balanced':
+            performanceSettings.temperature = 0.3;
+            performanceSettings.documentCount = 5;
+            description = '⚖️ バランスモード: 速度と精度のバランスが取れた設定（推奨）';
+            advancedSettings.style.display = 'none';
+            break;
+        case 'quality':
+            performanceSettings.temperature = 0.5;
+            performanceSettings.documentCount = 8;
+            description = '🎯 高精度モード: より多くのドキュメントを参照、詳細な回答を生成';
+            advancedSettings.style.display = 'none';
+            break;
+        case 'custom':
+            description = '🔧 カスタムモード: 詳細設定で自由に調整できます';
+            advancedSettings.style.display = 'block';
+            break;
+    }
+
+    descDiv.textContent = description;
+
+    // スライダーの値も更新
+    if (preset !== 'custom') {
+        tempSlider.value = performanceSettings.temperature;
+        docsSlider.value = performanceSettings.documentCount;
+        document.getElementById('tempValue').textContent = performanceSettings.temperature;
+        document.getElementById('docsValue').textContent = performanceSettings.documentCount;
+    }
+
+    // LocalStorageに保存
+    localStorage.setItem('performancePreset', preset);
+    localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
+}
+
+// Temperature更新
+function updateTemperature(value) {
+    performanceSettings.temperature = parseFloat(value);
+    document.getElementById('tempValue').textContent = value;
+    document.getElementById('performancePreset').value = 'custom';
+    localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
+}
+
+// ドキュメント数更新
+function updateDocs(value) {
+    performanceSettings.documentCount = parseInt(value);
+    document.getElementById('docsValue').textContent = value;
+    document.getElementById('performancePreset').value = 'custom';
+    localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
+}
+
+// 設定の読み込み
+function loadPerformanceSettings() {
+    const savedPreset = localStorage.getItem('performancePreset');
+    const savedSettings = localStorage.getItem('performanceSettings');
+
+    if (savedSettings) {
+        performanceSettings = JSON.parse(savedSettings);
+    }
+
+    if (savedPreset) {
+        document.getElementById('performancePreset').value = savedPreset;
+        applyPerformancePreset();
+    }
+}
+
 // 初期化実行
 init();
+loadPerformanceSettings();
 
 // 定期的にヘルスチェック
 setInterval(checkHealth, 30000);

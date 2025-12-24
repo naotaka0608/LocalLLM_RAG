@@ -30,6 +30,9 @@ class QueryRequest(BaseModel):
     question: str
     stream: bool = False
     model: Optional[str] = None
+    query_expansion: bool = False
+    temperature: Optional[float] = None
+    document_count: Optional[int] = None
 
 
 class QueryResponse(BaseModel):
@@ -96,7 +99,10 @@ async def query(request: QueryRequest):
     try:
         answer, sources = rag_service.query(
             request.question,
-            model_name=request.model
+            model_name=request.model,
+            enable_query_expansion=request.query_expansion,
+            temperature=request.temperature,
+            k=request.document_count
         )
         return QueryResponse(answer=answer, sources=sources)
     except Exception as e:
@@ -112,7 +118,10 @@ async def query_stream(request: QueryRequest):
         async def generate():
             async for chunk in rag_service.query_stream(
                 request.question,
-                model_name=request.model
+                model_name=request.model,
+                enable_query_expansion=request.query_expansion,
+                temperature=request.temperature,
+                k=request.document_count
             ):
                 yield f"data: {chunk}\n\n"
 

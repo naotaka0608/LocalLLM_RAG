@@ -5,7 +5,11 @@
       "Bash(mkdir:*)",
       "Bash(uv run:*)",
       "Bash(ollama list:*)",
-      "Bash(ollama pull:*)"
+      "Bash(ollama pull:*)",
+      "Bash(ollama ps:*)",
+      "Bash(nvidia-smi:*)",
+      "Bash(python:*)",
+      "Bash(.venv/Scripts/python.exe main.py)"
     ]
   }
 }

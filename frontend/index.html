@@ -37,10 +37,11 @@
             <div class="card">
                 <h2>チャット</h2>
                 <div style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 8px; display: flex; align-items: center; gap: 10px;">
-                    <label style="font-weight: 600; color: #333; white-space: nowrap;">モデル:</label>
-                    <select id="modelSelect" style="flex: 1; padding: 8px; border-radius: 5px; border: 2px solid #e0e0e0; font-size: 0.95rem;">
-                        <option value="">デフォルト (llama3.2)</option>
-                    </select>
+                    <label style="font-weight: 600; color: #333; white-space: nowrap; display: flex; align-items: center; gap: 5px;">
+                        <input type="checkbox" id="queryExpansionToggle" style="width: 18px; height: 18px; cursor: pointer;">
+                        クエリ拡張
+                    </label>
+                    <span style="font-size: 0.8rem; color: #666;">（高精度だが遅い - 複雑な質問向け）</span>
                 </div>
                 <div class="chat-area">
                     <div class="chat-messages" id="chatMessages">
@@ -95,6 +96,20 @@
                 </div>
 
                 <div class="card">
+                    <h2>⚡ 性能プリセット</h2>
+                    <p style="font-size: 0.85rem; color: #666; margin-bottom: 10px;">回答速度と精度のバランスを選択</p>
+                    <select id="performancePreset" onchange="applyPerformancePreset()" style="width: 100%; padding: 10px; border-radius: 5px; border: 2px solid #e0e0e0; font-size: 0.95rem; margin-bottom: 10px;">
+                        <option value="balanced">⚖️ バランス（推奨）</option>
+                        <option value="speed">🚀 高速優先</option>
+                        <option value="quality">🎯 高精度優先</option>
+                        <option value="custom">🔧 カスタム</option>
+                    </select>
+                    <div id="presetDescription" style="font-size: 0.8rem; color: #666; padding: 8px; background: #f8f9fa; border-radius: 5px; margin-top: 5px;">
+                        速度と精度のバランスが取れた設定です
+                    </div>
+                </div>
+
+                <div class="card">
                     <h2>🤖 モデル設定</h2>
                     <select id="modelSelectSettings" style="width: 100%; padding: 10px; border-radius: 5px; border: 2px solid #e0e0e0; font-size: 0.95rem; margin-bottom: 10px;">
                         <option value="">デフォルト (llama3.2)</option>
@@ -103,6 +118,28 @@
                         🔄 モデル再読み込み
                     </button>
                     <div id="modelCount" style="font-size: 0.85rem; color: #666; margin-top: 10px;"></div>
+                </div>
+
+                <div class="card" id="advancedSettings" style="display: none;">
+                    <h2>🔧 詳細設定</h2>
+                    <div style="margin-bottom: 10px;">
+                        <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
+                            Temperature (創造性): <span id="tempValue">0.3</span>
+                        </label>
+                        <input type="range" id="temperatureSlider" min="0" max="1" step="0.1" value="0.3"
+                               oninput="updateTemperature(this.value)"
+                               style="width: 100%;">
+                        <div style="font-size: 0.75rem; color: #999;">低い: 一貫性↑ 高い: 創造性↑</div>
+                    </div>
+                    <div style="margin-bottom: 10px;">
+                        <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
+                            検索ドキュメント数: <span id="docsValue">5</span>
+                        </label>
+                        <input type="range" id="docsSlider" min="3" max="10" step="1" value="5"
+                               oninput="updateDocs(this.value)"
+                               style="width: 100%;">
+                        <div style="font-size: 0.75rem; color: #999;">少ない: 高速↑ 多い: 精度↑</div>
+                    </div>
                 </div>
 
                 <div class="card">
