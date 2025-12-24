@@ -286,7 +286,15 @@ function switchMainTab(tabName) {
 // 初期化
 async function init() {
     loadChatHistory();
-    createNewChat(); // 初回は新規チャット作成
+
+    // 履歴がある場合は最後のチャットを開く、ない場合は新規作成
+    if (chatHistory.length > 0) {
+        const lastChat = chatHistory[chatHistory.length - 1];
+        loadChat(lastChat.id);
+    } else {
+        createNewChat();
+    }
+
     await checkHealth();
     await loadDocuments();
     await loadModels();
