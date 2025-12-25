@@ -172,7 +172,30 @@ class RAGService:
             print(f"[DEBUG] Query expansion failed: {e}, using original question only")
             return [question]
 
-    def query(self, question: str, k: int = 5, model_name: str = None, enable_query_expansion: bool = False, temperature: float = None) -> Tuple[str, List[str]]:
+    def _create_ollama_instance(self, model_name: str = None, **kwargs):
+        """Ollamaインスタンスを作成するヘルパーメソッド"""
+        # デフォルト値を設定
+        params = {
+            "model": model_name or self.model_name,
+            "base_url": "http://localhost:11434",
+            "temperature": kwargs.get("temperature", 0.3),
+            "top_p": kwargs.get("top_p", 0.9),
+            "repeat_penalty": kwargs.get("repeat_penalty", 1.1),
+        }
+
+        # オプショナルパラメータを追加（Noneでない場合のみ）
+        optional_params = ["num_predict", "top_k", "num_ctx", "seed",
+                          "mirostat", "mirostat_tau", "mirostat_eta", "tfs_z"]
+        for param in optional_params:
+            if param in kwargs and kwargs[param] is not None:
+                params[param] = kwargs[param]
+
+        return Ollama(**params)
+
+    def query(self, question: str, k: int = 5, model_name: str = None, enable_query_expansion: bool = False,
+              temperature: float = None, top_p: float = None, repeat_penalty: float = None,
+              num_predict: int = None, top_k: int = None, num_ctx: int = None, seed: int = None,
+              mirostat: int = None, mirostat_tau: float = None, mirostat_eta: float = None, tfs_z: float = None) -> Tuple[str, List[str]]:
         """
         質問に対してRAGで回答を生成
 
@@ -182,6 +205,8 @@ class RAGService:
             model_name: 使用するモデル名（Noneの場合はデフォルトモデルを使用）
             enable_query_expansion: クエリ拡張を有効にするか（デフォルト: False）
             temperature: LLMの温度パラメータ（Noneの場合はデフォルト0.3を使用）
+            top_p: Nucleus samplingパラメータ（Noneの場合はデフォルト0.9を使用）
+            repeat_penalty: 繰り返しペナルティ（Noneの場合はデフォルト1.1を使用）
 
         Returns:
             回答と参照元のタプル
@@ -212,25 +237,18 @@ class RAGService:
             except Exception as e:
                 print(f"[DEBUG] Error searching with query '{query}': {e}")
 
-        # 使用する温度を決定
-        effective_temperature = temperature if temperature is not None else 0.3
+        # パラメータをまとめる
+        llm_params = {
+            "temperature": temperature, "top_p": top_p, "repeat_penalty": repeat_penalty,
+            "num_predict": num_predict, "top_k": top_k, "num_ctx": num_ctx,
+            "seed": seed, "mirostat": mirostat, "mirostat_tau": mirostat_tau,
+            "mirostat_eta": mirostat_eta, "tfs_z": tfs_z
+        }
 
         if len(all_docs_with_scores) == 0:
             print("[DEBUG] No documents found in vector store. Responding without RAG context.")
             # ドキュメントがない場合は、RAGなしでLLMに直接質問
-            # モデルの選択
-            if model_name:
-                llm = Ollama(
-                    model=model_name,
-                    base_url="http://localhost:11434",
-                    temperature=effective_temperature
-                )
-            else:
-                llm = Ollama(
-                    model=self.model_name,
-                    base_url="http://localhost:11434",
-                    temperature=effective_temperature
-                )
+            llm = self._create_ollama_instance(model_name, **llm_params)
 
             # RAGなしのプロンプト
             simple_prompt = f"""あなたは親切で知識豊富なアシスタントです。以下の質問に答えてください。
@@ -253,18 +271,7 @@ class RAGService:
         prompt_text = self.prompt.format(context=context, question=question)
 
         # モデルの選択
-        if model_name:
-            llm = Ollama(
-                model=model_name,
-                base_url="http://localhost:11434",
-                temperature=effective_temperature
-            )
-        else:
-            llm = Ollama(
-                model=self.model_name,
-                base_url="http://localhost:11434",
-                temperature=effective_temperature
-            )
+        llm = self._create_ollama_instance(model_name, **llm_params)
 
         # 回答の生成
         answer = llm.invoke(prompt_text)
@@ -278,7 +285,10 @@ class RAGService:
 
         return answer, list(set(sources))
 
-    async def query_stream(self, question: str, k: int = 5, model_name: str = None, enable_query_expansion: bool = False, temperature: float = None):
+    async def query_stream(self, question: str, k: int = 5, model_name: str = None, enable_query_expansion: bool = False,
+                          temperature: float = None, top_p: float = None, repeat_penalty: float = None,
+                          num_predict: int = None, top_k: int = None, num_ctx: int = None, seed: int = None,
+                          mirostat: int = None, mirostat_tau: float = None, mirostat_eta: float = None, tfs_z: float = None):
         """
         質問に対してRAGで回答を生成（ストリーミング）
 
@@ -288,6 +298,8 @@ class RAGService:
             model_name: 使用するモデル名（Noneの場合はデフォルトモデルを使用）
             enable_query_expansion: クエリ拡張を有効にするか（デフォルト: False）
             temperature: LLMの温度パラメータ（Noneの場合はデフォルト0.3を使用）
+            top_p: Nucleus samplingパラメータ（Noneの場合はデフォルト0.9を使用）
+            repeat_penalty: 繰り返しペナルティ（Noneの場合はデフォルト1.1を使用）
 
         Yields:
             回答のチャンク
@@ -313,22 +325,16 @@ class RAGService:
             except Exception as e:
                 print(f"[DEBUG] Error searching with query '{query}': {e}")
 
-        # 使用する温度を決定
-        effective_temperature = temperature if temperature is not None else 0.3
+        # パラメータをまとめる
+        llm_params = {
+            "temperature": temperature, "top_p": top_p, "repeat_penalty": repeat_penalty,
+            "num_predict": num_predict, "top_k": top_k, "num_ctx": num_ctx,
+            "seed": seed, "mirostat": mirostat, "mirostat_tau": mirostat_tau,
+            "mirostat_eta": mirostat_eta, "tfs_z": tfs_z
+        }
 
         # モデルの選択
-        if model_name:
-            llm = Ollama(
-                model=model_name,
-                base_url="http://localhost:11434",
-                temperature=effective_temperature
-            )
-        else:
-            llm = Ollama(
-                model=self.model_name,
-                base_url="http://localhost:11434",
-                temperature=effective_temperature
-            )
+        llm = self._create_ollama_instance(model_name, **llm_params)
 
         # ドキュメントがない場合
         if len(all_docs_with_scores) == 0:

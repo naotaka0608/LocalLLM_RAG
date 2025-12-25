@@ -30,6 +30,7 @@
 
             <div class="main-tabs">
                 <button class="main-tab active" onclick="switchMainTab('chat')">💬 チャット</button>
+                <button class="main-tab" onclick="switchMainTab('parameters')">🎛️ パラメータ</button>
                 <button class="main-tab" onclick="switchMainTab('settings')">⚙️ 設定</button>
             </div>
 
@@ -73,6 +74,145 @@
             </div>
         </div>
 
+        <div id="parameters-main" class="main-tab-content">
+            <div class="settings-grid">
+                <div class="card">
+                    <h2>⚡ 性能プリセット</h2>
+                    <p style="font-size: 0.85rem; color: #666; margin-bottom: 10px;">回答速度と精度のバランスを選択</p>
+                    <select id="performancePreset" onchange="applyPerformancePreset()" style="width: 100%; padding: 10px; border-radius: 5px; border: 2px solid #e0e0e0; font-size: 0.95rem; margin-bottom: 10px;">
+                        <option value="balanced">⚖️ バランス（推奨）</option>
+                        <option value="speed">🚀 高速優先</option>
+                        <option value="quality">🎯 高精度優先</option>
+                        <option value="custom">🔧 カスタム</option>
+                    </select>
+                    <div id="presetDescription" style="font-size: 0.8rem; color: #666; padding: 8px; background: #f8f9fa; border-radius: 5px; margin-top: 5px;">
+                        速度と精度のバランスが取れた設定です
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>★ 主要パラメータ</h2>
+                    <p style="font-size: 0.85rem; color: #666; margin-bottom: 15px;">回答の品質と速度に最も影響するパラメータ</p>
+
+                    <div style="margin-bottom: 15px;">
+                        <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
+                            ★ Temperature (創造性): <span id="tempValue">0.3</span>
+                        </label>
+                        <input type="range" id="temperatureSlider" min="0" max="1" step="0.1" value="0.3"
+                               oninput="updateTemperature(this.value)" style="width: 100%;">
+                        <div style="font-size: 0.75rem; color: #999;">低い: 一貫性↑ 高い: 創造性↑</div>
+                    </div>
+
+                    <div style="margin-bottom: 15px;">
+                        <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
+                            ★ 検索ドキュメント数: <span id="docsValue">5</span>
+                        </label>
+                        <input type="range" id="docsSlider" min="3" max="10" step="1" value="5"
+                               oninput="updateDocs(this.value)" style="width: 100%;">
+                        <div style="font-size: 0.75rem; color: #999;">少ない: 高速↑ 多い: 精度↑</div>
+                    </div>
+
+                    <div style="margin-bottom: 15px;">
+                        <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
+                            ★ Top-P (多様性): <span id="topPValue">0.9</span>
+                        </label>
+                        <input type="range" id="topPSlider" min="0.1" max="1.0" step="0.05" value="0.9"
+                               oninput="updateTopP(this.value)" style="width: 100%;">
+                        <div style="font-size: 0.75rem; color: #999;">低い: 確実性↑ 高い: 多様性↑</div>
+                    </div>
+
+                    <div style="margin-bottom: 15px;">
+                        <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
+                            ★ Repeat Penalty (繰り返し抑制): <span id="repeatPenaltyValue">1.1</span>
+                        </label>
+                        <input type="range" id="repeatPenaltySlider" min="1.0" max="1.5" step="0.05" value="1.1"
+                               oninput="updateRepeatPenalty(this.value)" style="width: 100%;">
+                        <div style="font-size: 0.75rem; color: #999;">低い: 繰り返しOK 高い: 抑制強</div>
+                    </div>
+
+                    <div style="margin-bottom: 15px;">
+                        <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
+                            ★ Num Predict (最大生成トークン数): <span id="numPredictValue">-1 (無制限)</span>
+                        </label>
+                        <input type="range" id="numPredictSlider" min="-1" max="2048" step="128" value="-1"
+                               oninput="updateNumPredict(this.value)" style="width: 100%;">
+                        <div style="font-size: 0.75rem; color: #999;">-1=無制限、128/256/512/1024など。短い回答が欲しい場合は小さく</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>詳細パラメータ</h2>
+                    <p style="font-size: 0.85rem; color: #666; margin-bottom: 15px;">高度な調整用パラメータ</p>
+
+                    <div style="margin-bottom: 15px;">
+                        <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
+                            Top-K: <span id="topKValue">デフォルト (40)</span>
+                        </label>
+                        <input type="range" id="topKSlider" min="1" max="100" step="1" value="40"
+                               oninput="updateTopK(this.value)" style="width: 100%;">
+                        <div style="font-size: 0.75rem; color: #999;">各ステップで考慮する上位K個のトークン</div>
+                    </div>
+
+                    <div style="margin-bottom: 15px;">
+                        <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
+                            Num Ctx (コンテキストサイズ): <span id="numCtxValue">デフォルト (2048)</span>
+                        </label>
+                        <input type="range" id="numCtxSlider" min="512" max="8192" step="512" value="2048"
+                               oninput="updateNumCtx(this.value)" style="width: 100%;">
+                        <div style="font-size: 0.75rem; color: #999;">モデルが一度に考慮できるトークン数。長文向けは大きく</div>
+                    </div>
+
+                    <div style="margin-bottom: 15px;">
+                        <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
+                            Seed (乱数シード): <span id="seedValue">ランダム</span>
+                        </label>
+                        <input type="number" id="seedInput" placeholder="空欄=ランダム" min="0"
+                               oninput="updateSeed(this.value)" style="width: 100%; padding: 8px; border-radius: 5px; border: 2px solid #e0e0e0;">
+                        <div style="font-size: 0.75rem; color: #999;">同じ値で結果を再現可能。デバッグ用</div>
+                    </div>
+
+                    <div style="margin-bottom: 15px;">
+                        <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
+                            Mirostat: <span id="mirostatValue">無効 (0)</span>
+                        </label>
+                        <select id="mirostatSelect" onchange="updateMirostat(this.value)" style="width: 100%; padding: 8px; border-radius: 5px; border: 2px solid #e0e0e0;">
+                            <option value="0">無効 (0)</option>
+                            <option value="1">Mirostat 1.0</option>
+                            <option value="2">Mirostat 2.0</option>
+                        </select>
+                        <div style="font-size: 0.75rem; color: #999;">動的サンプリングでより一貫した品質</div>
+                    </div>
+
+                    <div style="margin-bottom: 15px;">
+                        <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
+                            Mirostat Tau: <span id="mirostatTauValue">デフォルト (5.0)</span>
+                        </label>
+                        <input type="range" id="mirostatTauSlider" min="0.1" max="10.0" step="0.1" value="5.0"
+                               oninput="updateMirostatTau(this.value)" style="width: 100%;">
+                        <div style="font-size: 0.75rem; color: #999;">Mirostat有効時の目標エントロピー</div>
+                    </div>
+
+                    <div style="margin-bottom: 15px;">
+                        <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
+                            Mirostat Eta: <span id="mirostatEtaValue">デフォルト (0.1)</span>
+                        </label>
+                        <input type="range" id="mirostatEtaSlider" min="0.01" max="1.0" step="0.01" value="0.1"
+                               oninput="updateMirostatEta(this.value)" style="width: 100%;">
+                        <div style="font-size: 0.75rem; color: #999;">Mirostat有効時の学習率</div>
+                    </div>
+
+                    <div style="margin-bottom: 15px;">
+                        <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
+                            TFS-Z: <span id="tfsZValue">デフォルト (1.0)</span>
+                        </label>
+                        <input type="range" id="tfsZSlider" min="1.0" max="2.0" step="0.05" value="1.0"
+                               oninput="updateTfsZ(this.value)" style="width: 100%;">
+                        <div style="font-size: 0.75rem; color: #999;">Tail Free Sampling。1.0=無効</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div id="settings-main" class="main-tab-content">
             <div class="settings-grid">
                 <div class="card">
@@ -96,20 +236,6 @@
                 </div>
 
                 <div class="card">
-                    <h2>⚡ 性能プリセット</h2>
-                    <p style="font-size: 0.85rem; color: #666; margin-bottom: 10px;">回答速度と精度のバランスを選択</p>
-                    <select id="performancePreset" onchange="applyPerformancePreset()" style="width: 100%; padding: 10px; border-radius: 5px; border: 2px solid #e0e0e0; font-size: 0.95rem; margin-bottom: 10px;">
-                        <option value="balanced">⚖️ バランス（推奨）</option>
-                        <option value="speed">🚀 高速優先</option>
-                        <option value="quality">🎯 高精度優先</option>
-                        <option value="custom">🔧 カスタム</option>
-                    </select>
-                    <div id="presetDescription" style="font-size: 0.8rem; color: #666; padding: 8px; background: #f8f9fa; border-radius: 5px; margin-top: 5px;">
-                        速度と精度のバランスが取れた設定です
-                    </div>
-                </div>
-
-                <div class="card">
                     <h2>🤖 モデル設定</h2>
                     <select id="modelSelectSettings" style="width: 100%; padding: 10px; border-radius: 5px; border: 2px solid #e0e0e0; font-size: 0.95rem; margin-bottom: 10px;">
                         <option value="">デフォルト (llama3.2)</option>
@@ -118,28 +244,6 @@
                         🔄 モデル再読み込み
                     </button>
                     <div id="modelCount" style="font-size: 0.85rem; color: #666; margin-top: 10px;"></div>
-                </div>
-
-                <div class="card" id="advancedSettings" style="display: none;">
-                    <h2>🔧 詳細設定</h2>
-                    <div style="margin-bottom: 10px;">
-                        <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
-                            Temperature (創造性): <span id="tempValue">0.3</span>
-                        </label>
-                        <input type="range" id="temperatureSlider" min="0" max="1" step="0.1" value="0.3"
-                               oninput="updateTemperature(this.value)"
-                               style="width: 100%;">
-                        <div style="font-size: 0.75rem; color: #999;">低い: 一貫性↑ 高い: 創造性↑</div>
-                    </div>
-                    <div style="margin-bottom: 10px;">
-                        <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
-                            検索ドキュメント数: <span id="docsValue">5</span>
-                        </label>
-                        <input type="range" id="docsSlider" min="3" max="10" step="1" value="5"
-                               oninput="updateDocs(this.value)"
-                               style="width: 100%;">
-                        <div style="font-size: 0.75rem; color: #999;">少ない: 高速↑ 多い: 精度↑</div>
-                    </div>
                 </div>
 
                 <div class="card">

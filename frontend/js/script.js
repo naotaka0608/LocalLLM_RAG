@@ -9,8 +9,20 @@ let currentChatId = null;
 
 // 性能設定
 let performanceSettings = {
+    // 主要パラメータ
     temperature: 0.3,
-    documentCount: 5
+    documentCount: 5,
+    topP: 0.9,
+    repeatPenalty: 1.1,
+    numPredict: null,  // -1 = 無制限
+    // 詳細パラメータ
+    topK: null,
+    numCtx: null,
+    seed: null,
+    mirostat: null,
+    mirostatTau: null,
+    mirostatEta: null,
+    tfsZ: null
 };
 
 // LocalStorageから履歴を読み込む
@@ -561,8 +573,20 @@ async function sendQuestion() {
         const requestBody = {
             question,
             query_expansion: queryExpansion,
+            // 主要パラメータ
             temperature: performanceSettings.temperature,
-            document_count: performanceSettings.documentCount
+            document_count: performanceSettings.documentCount,
+            top_p: performanceSettings.topP,
+            repeat_penalty: performanceSettings.repeatPenalty,
+            num_predict: performanceSettings.numPredict,
+            // 詳細パラメータ
+            top_k: performanceSettings.topK,
+            num_ctx: performanceSettings.numCtx,
+            seed: performanceSettings.seed,
+            mirostat: performanceSettings.mirostat,
+            mirostat_tau: performanceSettings.mirostatTau,
+            mirostat_eta: performanceSettings.mirostatEta,
+            tfs_z: performanceSettings.tfsZ
         };
 
         // モデルが選択されている場合のみ追加
@@ -712,9 +736,6 @@ function handleKeyPress(event) {
 function applyPerformancePreset() {
     const preset = document.getElementById('performancePreset').value;
     const descDiv = document.getElementById('presetDescription');
-    const advancedSettings = document.getElementById('advancedSettings');
-    const tempSlider = document.getElementById('temperatureSlider');
-    const docsSlider = document.getElementById('docsSlider');
 
     let description = '';
 
@@ -722,24 +743,26 @@ function applyPerformancePreset() {
         case 'speed':
             performanceSettings.temperature = 0.1;
             performanceSettings.documentCount = 3;
+            performanceSettings.topP = 0.7;
+            performanceSettings.repeatPenalty = 1.2;
             description = '🚀 最速モード: 低temperature、少ないドキュメント検索で高速化';
-            advancedSettings.style.display = 'none';
             break;
         case 'balanced':
             performanceSettings.temperature = 0.3;
             performanceSettings.documentCount = 5;
+            performanceSettings.topP = 0.9;
+            performanceSettings.repeatPenalty = 1.1;
             description = '⚖️ バランスモード: 速度と精度のバランスが取れた設定（推奨）';
-            advancedSettings.style.display = 'none';
             break;
         case 'quality':
             performanceSettings.temperature = 0.5;
             performanceSettings.documentCount = 8;
+            performanceSettings.topP = 0.95;
+            performanceSettings.repeatPenalty = 1.0;
             description = '🎯 高精度モード: より多くのドキュメントを参照、詳細な回答を生成';
-            advancedSettings.style.display = 'none';
             break;
         case 'custom':
-            description = '🔧 カスタムモード: 詳細設定で自由に調整できます';
-            advancedSettings.style.display = 'block';
+            description = '🔧 カスタムモード: 下記パラメータで自由に調整できます';
             break;
     }
 
@@ -747,10 +770,15 @@ function applyPerformancePreset() {
 
     // スライダーの値も更新
     if (preset !== 'custom') {
-        tempSlider.value = performanceSettings.temperature;
-        docsSlider.value = performanceSettings.documentCount;
+        document.getElementById('temperatureSlider').value = performanceSettings.temperature;
+        document.getElementById('docsSlider').value = performanceSettings.documentCount;
+        document.getElementById('topPSlider').value = performanceSettings.topP;
+        document.getElementById('repeatPenaltySlider').value = performanceSettings.repeatPenalty;
+
         document.getElementById('tempValue').textContent = performanceSettings.temperature;
         document.getElementById('docsValue').textContent = performanceSettings.documentCount;
+        document.getElementById('topPValue').textContent = performanceSettings.topP;
+        document.getElementById('repeatPenaltyValue').textContent = performanceSettings.repeatPenalty;
     }
 
     // LocalStorageに保存
@@ -771,6 +799,80 @@ function updateDocs(value) {
     performanceSettings.documentCount = parseInt(value);
     document.getElementById('docsValue').textContent = value;
     document.getElementById('performancePreset').value = 'custom';
+    localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
+}
+
+// Top-P更新
+function updateTopP(value) {
+    performanceSettings.topP = parseFloat(value);
+    document.getElementById('topPValue').textContent = value;
+    document.getElementById('performancePreset').value = 'custom';
+    localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
+}
+
+// Repeat Penalty更新
+function updateRepeatPenalty(value) {
+    performanceSettings.repeatPenalty = parseFloat(value);
+    document.getElementById('repeatPenaltyValue').textContent = value;
+    document.getElementById('performancePreset').value = 'custom';
+    localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
+}
+
+// Num Predict更新
+function updateNumPredict(value) {
+    performanceSettings.numPredict = value === "-1" ? null : parseInt(value);
+    document.getElementById('numPredictValue').textContent = value === "-1" ? "-1 (無制限)" : value;
+    localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
+}
+
+// Top-K更新
+function updateTopK(value) {
+    performanceSettings.topK = parseInt(value);
+    document.getElementById('topKValue').textContent = value;
+    localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
+}
+
+// Num Ctx更新
+function updateNumCtx(value) {
+    performanceSettings.numCtx = parseInt(value);
+    document.getElementById('numCtxValue').textContent = value;
+    localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
+}
+
+// Seed更新
+function updateSeed(value) {
+    performanceSettings.seed = value === "" ? null : parseInt(value);
+    document.getElementById('seedValue').textContent = value === "" ? "ランダム" : value;
+    localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
+}
+
+// Mirostat更新
+function updateMirostat(value) {
+    const intValue = parseInt(value);
+    performanceSettings.mirostat = intValue === 0 ? null : intValue;
+    const labels = { "0": "無効 (0)", "1": "Mirostat 1.0", "2": "Mirostat 2.0" };
+    document.getElementById('mirostatValue').textContent = labels[value] || value;
+    localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
+}
+
+// Mirostat Tau更新
+function updateMirostatTau(value) {
+    performanceSettings.mirostatTau = parseFloat(value);
+    document.getElementById('mirostatTauValue').textContent = value;
+    localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
+}
+
+// Mirostat Eta更新
+function updateMirostatEta(value) {
+    performanceSettings.mirostatEta = parseFloat(value);
+    document.getElementById('mirostatEtaValue').textContent = value;
+    localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
+}
+
+// TFS-Z更新
+function updateTfsZ(value) {
+    performanceSettings.tfsZ = parseFloat(value);
+    document.getElementById('tfsZValue').textContent = value;
     localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
 }
 

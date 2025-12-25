@@ -31,8 +31,20 @@ class QueryRequest(BaseModel):
     stream: bool = False
     model: Optional[str] = None
     query_expansion: bool = False
+    # 主要パラメータ (★)
     temperature: Optional[float] = None
     document_count: Optional[int] = None
+    top_p: Optional[float] = None
+    repeat_penalty: Optional[float] = None
+    num_predict: Optional[int] = None
+    # 詳細パラメータ
+    top_k: Optional[int] = None
+    num_ctx: Optional[int] = None
+    seed: Optional[int] = None
+    mirostat: Optional[int] = None
+    mirostat_tau: Optional[float] = None
+    mirostat_eta: Optional[float] = None
+    tfs_z: Optional[float] = None
 
 
 class QueryResponse(BaseModel):
@@ -102,7 +114,17 @@ async def query(request: QueryRequest):
             model_name=request.model,
             enable_query_expansion=request.query_expansion,
             temperature=request.temperature,
-            k=request.document_count
+            k=request.document_count,
+            top_p=request.top_p,
+            repeat_penalty=request.repeat_penalty,
+            num_predict=request.num_predict,
+            top_k=request.top_k,
+            num_ctx=request.num_ctx,
+            seed=request.seed,
+            mirostat=request.mirostat,
+            mirostat_tau=request.mirostat_tau,
+            mirostat_eta=request.mirostat_eta,
+            tfs_z=request.tfs_z
         )
         return QueryResponse(answer=answer, sources=sources)
     except Exception as e:
@@ -121,7 +143,17 @@ async def query_stream(request: QueryRequest):
                 model_name=request.model,
                 enable_query_expansion=request.query_expansion,
                 temperature=request.temperature,
-                k=request.document_count
+                k=request.document_count,
+                top_p=request.top_p,
+                repeat_penalty=request.repeat_penalty,
+                num_predict=request.num_predict,
+                top_k=request.top_k,
+                num_ctx=request.num_ctx,
+                seed=request.seed,
+                mirostat=request.mirostat,
+                mirostat_tau=request.mirostat_tau,
+                mirostat_eta=request.mirostat_eta,
+                tfs_z=request.tfs_z
             ):
                 yield f"data: {chunk}\n\n"
 
