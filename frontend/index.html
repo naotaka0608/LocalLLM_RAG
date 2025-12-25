@@ -85,8 +85,24 @@
                         <option value="quality">🎯 高精度優先</option>
                         <option value="custom">🔧 カスタム</option>
                     </select>
-                    <div id="presetDescription" style="font-size: 0.8rem; color: #666; padding: 8px; background: #f8f9fa; border-radius: 5px; margin-top: 5px;">
+                    <div id="presetDescription" style="font-size: 0.8rem; color: #666; padding: 8px; background: #f8f9fa; border-radius: 5px; margin-bottom: 10px;">
                         速度と精度のバランスが取れた設定です
+                    </div>
+
+                    <!-- カスタムプリセット管理 -->
+                    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e0e0e0;">
+                        <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                            <input type="text" id="customPresetName" placeholder="プリセット名を入力..."
+                                   style="flex: 1; padding: 8px; border-radius: 5px; border: 2px solid #e0e0e0; font-size: 0.9rem;">
+                            <button onclick="saveCustomPreset()"
+                                    style="padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 0.9rem; white-space: nowrap;">
+                                💾 保存
+                            </button>
+                        </div>
+                        <div id="customPresetsList" style="display: none; margin-top: 10px;">
+                            <div style="font-size: 0.85rem; color: #666; margin-bottom: 8px; font-weight: 600;">保存済みプリセット:</div>
+                            <div id="customPresetsContainer"></div>
+                        </div>
                     </div>
                 </div>
 

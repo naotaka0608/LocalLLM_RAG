@@ -25,6 +25,9 @@ let performanceSettings = {
     tfsZ: null
 };
 
+// カスタムプリセット
+let customPresets = {};
+
 // LocalStorageから履歴を読み込む
 function loadChatHistory() {
     const saved = localStorage.getItem('chatHistory');
@@ -239,14 +242,30 @@ function loadChat(chatId) {
 
         if (msg.sources && msg.sources.length > 0) {
             const sourceId = 'sources-' + Date.now() + Math.random();
+
+            // スコア情報がある場合はスコアバー付きで表示
+            let sourcesHTML = '';
+            if (msg.sourceScores && msg.sourceScores.length > 0) {
+                const sortedScores = [...msg.sourceScores].sort((a, b) => b.score - a.score);
+                sourcesHTML = sortedScores.map(item => `
+                    <div style="margin-bottom: 10px; padding: 8px; background: #fafafa; border-radius: 4px;">
+                        <div style="font-size: 0.85rem; color: #333;">• ${escapeHtml(item.source)}</div>
+                        ${createScoreBar(item.score)}
+                    </div>
+                `).join('');
+            } else {
+                sourcesHTML = msg.sources.map(s => `<div>• ${escapeHtml(s)}</div>`).join('');
+            }
+
             html += `
                 <div class="sources">
                     <div class="sources-title" onclick="toggleSources('${sourceId}')">
                         <span class="sources-toggle collapsed" id="${sourceId}-toggle">▼</span>
                         参照元 (${msg.sources.length}件)
+                        ${msg.sourceScores && msg.sourceScores.length > 0 ? '<span style="font-size: 0.75rem; color: #999; margin-left: 8px;">関連度スコア付き</span>' : ''}
                     </div>
                     <div class="sources-list collapsed" id="${sourceId}">
-                        ${msg.sources.map(s => `<div>• ${s}</div>`).join('')}
+                        ${sourcesHTML}
                     </div>
                 </div>
             `;
@@ -260,7 +279,7 @@ function loadChat(chatId) {
 }
 
 // 現在のチャットにメッセージを保存
-function saveMessageToHistory(sender, text, type, sources = null) {
+function saveMessageToHistory(sender, text, type, sources = null, sourceScores = null) {
     if (!currentChatId) {
         createNewChat();
     }
@@ -268,7 +287,7 @@ function saveMessageToHistory(sender, text, type, sources = null) {
     const chat = chatHistory.find(c => c.id === currentChatId);
     if (!chat) return;
 
-    chat.messages.push({ sender, text, type, sources });
+    chat.messages.push({ sender, text, type, sources, sourceScores });
 
     // 最初のユーザーメッセージをタイトルにする
     if (type === 'user' && chat.messages.filter(m => m.type === 'user').length === 1) {
@@ -612,6 +631,11 @@ async function sendQuestion() {
         const contentDiv = messageDiv.querySelector('.streaming-content');
         let isFirstChunk = true;
 
+        // 速度計測用の変数
+        let startTime = null;
+        let tokenCount = 0;
+        let speedDisplay = null;
+
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
@@ -623,17 +647,53 @@ async function sendQuestion() {
                 if (line.startsWith('data: ')) {
                     const content = line.slice(6);
 
-                    // 最初のチャンクでローディング表示をクリア
+                    // 最初のチャンクでローディング表示をクリアし、速度表示を追加
                     if (isFirstChunk && content) {
-                        contentDiv.textContent = '';
+                        contentDiv.innerHTML = '';
+
+                        // 速度表示エリアを追加
+                        speedDisplay = document.createElement('div');
+                        speedDisplay.style.cssText = 'font-size: 0.75rem; color: #999; margin-bottom: 8px; padding: 4px 8px; background: #f0f0f0; border-radius: 4px; display: inline-block;';
+                        speedDisplay.textContent = '生成中...';
+                        contentDiv.appendChild(speedDisplay);
+
+                        const textContent = document.createElement('div');
+                        textContent.id = 'streamingText';
+                        contentDiv.appendChild(textContent);
+
+                        startTime = Date.now();
                         isFirstChunk = false;
                     }
 
                     fullAnswer += content;
-                    contentDiv.textContent = fullAnswer;
+                    tokenCount += content.length > 0 ? 1 : 0;
+
+                    const textElement = document.getElementById('streamingText');
+                    if (textElement) {
+                        textElement.textContent = fullAnswer;
+                    }
+
+                    // 速度を更新（0.5秒ごと）
+                    if (startTime && speedDisplay && tokenCount > 0) {
+                        const elapsed = (Date.now() - startTime) / 1000;
+                        if (elapsed > 0) {
+                            const speed = (tokenCount / elapsed).toFixed(1);
+                            speedDisplay.textContent = `⚡ ${speed} トークン/秒`;
+                        }
+                    }
+
                     messagesDiv.scrollTop = messagesDiv.scrollHeight;
                 }
             }
+        }
+
+        // 最終速度を表示
+        if (startTime && speedDisplay && tokenCount > 0) {
+            const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+            const avgSpeed = (tokenCount / (totalTime)).toFixed(1);
+            speedDisplay.textContent = `✓ 完了: ${avgSpeed} トークン/秒 (${totalTime}秒, ${tokenCount}トークン)`;
+            speedDisplay.style.background = '#e8f5e9';
+            speedDisplay.style.color = '#2e7d32';
         }
 
         // 履歴に保存
@@ -678,8 +738,29 @@ function removeLoadingMessage(loadingId) {
     }
 }
 
+// スコアに応じた色を取得
+function getScoreColor(score) {
+    if (score >= 0.8) return '#4caf50'; // 緑: 高関連度
+    if (score >= 0.5) return '#ff9800'; // オレンジ: 中関連度
+    return '#f44336'; // 赤: 低関連度
+}
+
+// スコアバーのHTMLを生成
+function createScoreBar(score) {
+    const percentage = Math.round(score * 100);
+    const color = getScoreColor(score);
+    return `
+        <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+            <div style="flex: 1; height: 6px; background: #e0e0e0; border-radius: 3px; overflow: hidden;">
+                <div style="width: ${percentage}%; height: 100%; background: ${color}; transition: width 0.3s;"></div>
+            </div>
+            <span style="font-size: 0.75rem; color: ${color}; font-weight: 600; min-width: 45px;">${percentage}%</span>
+        </div>
+    `;
+}
+
 // メッセージ追加
-function addMessage(sender, text, type = 'assistant', sources = null) {
+function addMessage(sender, text, type = 'assistant', sources = null, sourceScores = null) {
     const messagesDiv = document.getElementById('chatMessages');
     const messageDiv = document.createElement('div');
 
@@ -693,14 +774,32 @@ function addMessage(sender, text, type = 'assistant', sources = null) {
 
     if (sources && sources.length > 0) {
         const sourceId = 'sources-' + Date.now();
+
+        // スコア情報がある場合はスコアバー付きで表示
+        let sourcesHTML = '';
+        if (sourceScores && sourceScores.length > 0) {
+            // スコア順にソート（高い順）
+            const sortedScores = [...sourceScores].sort((a, b) => b.score - a.score);
+            sourcesHTML = sortedScores.map(item => `
+                <div style="margin-bottom: 10px; padding: 8px; background: #fafafa; border-radius: 4px;">
+                    <div style="font-size: 0.85rem; color: #333;">• ${escapeHtml(item.source)}</div>
+                    ${createScoreBar(item.score)}
+                </div>
+            `).join('');
+        } else {
+            // スコア情報がない場合は従来通りシンプル表示
+            sourcesHTML = sources.map(s => `<div>• ${escapeHtml(s)}</div>`).join('');
+        }
+
         html += `
             <div class="sources">
                 <div class="sources-title" onclick="toggleSources('${sourceId}')">
                     <span class="sources-toggle collapsed" id="${sourceId}-toggle">▼</span>
                     参照元 (${sources.length}件)
+                    ${sourceScores && sourceScores.length > 0 ? '<span style="font-size: 0.75rem; color: #999; margin-left: 8px;">関連度スコア付き</span>' : ''}
                 </div>
                 <div class="sources-list collapsed" id="${sourceId}">
-                    ${sources.map(s => `<div>• ${s}</div>`).join('')}
+                    ${sourcesHTML}
                 </div>
             </div>
         `;
@@ -711,7 +810,7 @@ function addMessage(sender, text, type = 'assistant', sources = null) {
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
 
     // 履歴に保存
-    saveMessageToHistory(sender, text, type, sources);
+    saveMessageToHistory(sender, text, type, sources, sourceScores);
 }
 
 // 参照元の開閉
@@ -876,13 +975,148 @@ function updateTfsZ(value) {
     localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
 }
 
+// カスタムプリセットを保存
+function saveCustomPreset() {
+    const nameInput = document.getElementById('customPresetName');
+    const name = nameInput.value.trim();
+
+    if (!name) {
+        alert('プリセット名を入力してください');
+        return;
+    }
+
+    // 現在の設定を保存
+    customPresets[name] = { ...performanceSettings };
+    localStorage.setItem('customPresets', JSON.stringify(customPresets));
+
+    nameInput.value = '';
+    renderCustomPresets();
+    showNotification(`プリセット "${name}" を保存しました`, 'success');
+}
+
+// カスタムプリセットを読み込み
+function loadCustomPreset(name) {
+    if (customPresets[name]) {
+        performanceSettings = { ...customPresets[name] };
+
+        // UIを更新
+        updateAllParameterUI();
+
+        // プリセット選択をカスタムに変更
+        document.getElementById('performancePreset').value = 'custom';
+        document.getElementById('presetDescription').textContent = `🔧 カスタムプリセット: ${name}`;
+
+        localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
+        showNotification(`プリセット "${name}" を読み込みました`, 'success');
+    }
+}
+
+// カスタムプリセットを削除
+function deleteCustomPreset(name) {
+    if (confirm(`プリセット "${name}" を削除しますか？`)) {
+        delete customPresets[name];
+        localStorage.setItem('customPresets', JSON.stringify(customPresets));
+        renderCustomPresets();
+        showNotification(`プリセット "${name}" を削除しました`, 'success');
+    }
+}
+
+// カスタムプリセット一覧を表示
+function renderCustomPresets() {
+    const container = document.getElementById('customPresetsContainer');
+    const listDiv = document.getElementById('customPresetsList');
+
+    const presetNames = Object.keys(customPresets);
+
+    if (presetNames.length === 0) {
+        listDiv.style.display = 'none';
+        return;
+    }
+
+    listDiv.style.display = 'block';
+    container.innerHTML = presetNames.map(name => `
+        <div style="display: flex; align-items: center; gap: 8px; padding: 6px; background: #f8f9fa; border-radius: 5px; margin-bottom: 6px;">
+            <span style="flex: 1; font-size: 0.9rem; color: #333;">📌 ${escapeHtml(name)}</span>
+            <button onclick="loadCustomPreset('${escapeHtml(name)}')"
+                    style="padding: 4px 10px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">
+                読込
+            </button>
+            <button onclick="deleteCustomPreset('${escapeHtml(name)}')"
+                    style="padding: 4px 10px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">
+                削除
+            </button>
+        </div>
+    `).join('');
+}
+
+// 全パラメータのUIを更新
+function updateAllParameterUI() {
+    document.getElementById('temperatureSlider').value = performanceSettings.temperature;
+    document.getElementById('docsSlider').value = performanceSettings.documentCount;
+    document.getElementById('topPSlider').value = performanceSettings.topP;
+    document.getElementById('repeatPenaltySlider').value = performanceSettings.repeatPenalty;
+
+    document.getElementById('tempValue').textContent = performanceSettings.temperature;
+    document.getElementById('docsValue').textContent = performanceSettings.documentCount;
+    document.getElementById('topPValue').textContent = performanceSettings.topP;
+    document.getElementById('repeatPenaltyValue').textContent = performanceSettings.repeatPenalty;
+
+    // 詳細パラメータ
+    if (performanceSettings.numPredict !== null) {
+        document.getElementById('numPredictSlider').value = performanceSettings.numPredict;
+        document.getElementById('numPredictValue').textContent = performanceSettings.numPredict === -1 ? '-1 (無制限)' : performanceSettings.numPredict;
+    }
+
+    if (performanceSettings.topK !== null) {
+        document.getElementById('topKSlider').value = performanceSettings.topK;
+        document.getElementById('topKValue').textContent = performanceSettings.topK;
+    }
+
+    if (performanceSettings.numCtx !== null) {
+        document.getElementById('numCtxSlider').value = performanceSettings.numCtx;
+        document.getElementById('numCtxValue').textContent = performanceSettings.numCtx;
+    }
+
+    if (performanceSettings.seed !== null) {
+        document.getElementById('seedInput').value = performanceSettings.seed;
+        document.getElementById('seedValue').textContent = performanceSettings.seed;
+    }
+
+    if (performanceSettings.mirostat !== null) {
+        document.getElementById('mirostatSelect').value = performanceSettings.mirostat;
+        const labels = { 0: "無効 (0)", 1: "Mirostat 1.0", 2: "Mirostat 2.0" };
+        document.getElementById('mirostatValue').textContent = labels[performanceSettings.mirostat];
+    }
+
+    if (performanceSettings.mirostatTau !== null) {
+        document.getElementById('mirostatTauSlider').value = performanceSettings.mirostatTau;
+        document.getElementById('mirostatTauValue').textContent = performanceSettings.mirostatTau;
+    }
+
+    if (performanceSettings.mirostatEta !== null) {
+        document.getElementById('mirostatEtaSlider').value = performanceSettings.mirostatEta;
+        document.getElementById('mirostatEtaValue').textContent = performanceSettings.mirostatEta;
+    }
+
+    if (performanceSettings.tfsZ !== null) {
+        document.getElementById('tfsZSlider').value = performanceSettings.tfsZ;
+        document.getElementById('tfsZValue').textContent = performanceSettings.tfsZ;
+    }
+}
+
 // 設定の読み込み
 function loadPerformanceSettings() {
     const savedPreset = localStorage.getItem('performancePreset');
     const savedSettings = localStorage.getItem('performanceSettings');
+    const savedCustomPresets = localStorage.getItem('customPresets');
 
     if (savedSettings) {
         performanceSettings = JSON.parse(savedSettings);
+    }
+
+    if (savedCustomPresets) {
+        customPresets = JSON.parse(savedCustomPresets);
+        renderCustomPresets();
     }
 
     if (savedPreset) {

@@ -195,7 +195,7 @@ class RAGService:
     def query(self, question: str, k: int = 5, model_name: str = None, enable_query_expansion: bool = False,
               temperature: float = None, top_p: float = None, repeat_penalty: float = None,
               num_predict: int = None, top_k: int = None, num_ctx: int = None, seed: int = None,
-              mirostat: int = None, mirostat_tau: float = None, mirostat_eta: float = None, tfs_z: float = None) -> Tuple[str, List[str]]:
+              mirostat: int = None, mirostat_tau: float = None, mirostat_eta: float = None, tfs_z: float = None) -> Tuple[str, List[str], List[dict]]:
         """
         質問に対してRAGで回答を生成
 
@@ -209,7 +209,7 @@ class RAGService:
             repeat_penalty: 繰り返しペナルティ（Noneの場合はデフォルト1.1を使用）
 
         Returns:
-            回答と参照元のタプル
+            回答、参照元、スコア情報のタプル
         """
         print(f"[DEBUG] Query received: {question}")
         print(f"[DEBUG] Model: {model_name if model_name else f'default ({self.model_name})'}")
@@ -258,11 +258,12 @@ class RAGService:
 回答:"""
 
             answer = llm.invoke(simple_prompt)
-            return answer, []
+            return answer, [], []
 
         # スコアでソート(ChromaDBの場合、スコアが小さいほど類似度が高い)して上位k件を選択
         all_docs_with_scores.sort(key=lambda x: x[1])
-        top_docs = [doc for doc, _score in all_docs_with_scores[:k]]
+        top_docs_with_scores = all_docs_with_scores[:k]
+        top_docs = [doc for doc, _score in top_docs_with_scores]
 
         # コンテキストの構築
         context = "\n\n".join([doc.page_content for doc in top_docs])
@@ -276,14 +277,21 @@ class RAGService:
         # 回答の生成
         answer = llm.invoke(prompt_text)
 
-        # 参照元の抽出
+        # 参照元の抽出とスコア情報の作成
         sources = []
-        for doc in top_docs:
+        source_scores = []
+        for doc, score in top_docs_with_scores:
             source = doc.metadata.get("source_file", "Unknown")
             page = doc.metadata.get("page", "Unknown")
-            sources.append(f"{source} (Page {page})")
+            source_str = f"{source} (Page {page})"
+            sources.append(source_str)
 
-        return answer, list(set(sources))
+            # スコアを0-1の範囲に正規化（ChromaDBのスコアは距離なので、小さいほど良い）
+            # 0に近いほど関連度が高いので、1 - (score / max_score)で正規化
+            normalized_score = max(0, min(1, 1 - (score / 2)))
+            source_scores.append({"source": source_str, "score": round(normalized_score, 3)})
+
+        return answer, list(set(sources)), source_scores
 
     async def query_stream(self, question: str, k: int = 5, model_name: str = None, enable_query_expansion: bool = False,
                           temperature: float = None, top_p: float = None, repeat_penalty: float = None,

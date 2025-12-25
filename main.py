@@ -47,9 +47,14 @@ class QueryRequest(BaseModel):
     tfs_z: Optional[float] = None
 
 
+class SourceInfo(BaseModel):
+    source: str
+    score: float
+
 class QueryResponse(BaseModel):
     answer: str
     sources: List[str]
+    source_scores: Optional[List[SourceInfo]] = None
 
 
 class ModelListResponse(BaseModel):
@@ -109,7 +114,7 @@ async def query(request: QueryRequest):
     質問に対してRAGで回答を生成（非ストリーミング）
     """
     try:
-        answer, sources = rag_service.query(
+        answer, sources, source_scores = rag_service.query(
             request.question,
             model_name=request.model,
             enable_query_expansion=request.query_expansion,
@@ -126,7 +131,7 @@ async def query(request: QueryRequest):
             mirostat_eta=request.mirostat_eta,
             tfs_z=request.tfs_z
         )
-        return QueryResponse(answer=answer, sources=sources)
+        return QueryResponse(answer=answer, sources=sources, source_scores=source_scores)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
