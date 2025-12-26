@@ -1262,3 +1262,58 @@ loadPerformanceSettings();
 
 // 定期的にヘルスチェック
 setInterval(checkHealth, 30000);
+
+// モバイルサイドバートグル機能
+function initMobileSidebarToggle() {
+    const sidebar = document.querySelector('.sidebar');
+    const newChatBtn = document.querySelector('.btn-new-chat');
+
+    if (!sidebar || !newChatBtn) return;
+
+    // モバイルかどうかをチェック
+    function isMobile() {
+        return window.innerWidth <= 768;
+    }
+
+    // 新規チャットボタンをトグルボタンとしても機能させる
+    newChatBtn.addEventListener('click', (e) => {
+        if (isMobile()) {
+            // サイドバーがすでに展開されている場合は新規チャットを作成
+            if (sidebar.classList.contains('expanded')) {
+                // 既存の新規チャット機能を実行
+                createNewChat();
+                // サイドバーを閉じる
+                setTimeout(() => {
+                    sidebar.classList.remove('expanded');
+                }, 100);
+            } else {
+                // サイドバーを展開
+                sidebar.classList.add('expanded');
+                e.preventDefault(); // デフォルトの新規チャット作成を防ぐ
+            }
+        }
+        // デスクトップでは通常通り新規チャット作成
+    });
+
+    // 履歴アイテムをクリックしたらサイドバーを閉じる
+    document.addEventListener('click', (e) => {
+        if (!isMobile()) return;
+
+        const historyItem = e.target.closest('.history-item');
+        if (historyItem && sidebar.classList.contains('expanded')) {
+            setTimeout(() => {
+                sidebar.classList.remove('expanded');
+            }, 200);
+        }
+    });
+
+    // 画面サイズが変更されたらクラスをリセット
+    window.addEventListener('resize', () => {
+        if (!isMobile()) {
+            sidebar.classList.remove('expanded');
+        }
+    });
+}
+
+// モバイルサイドバートグルを初期化
+initMobileSidebarToggle();

@@ -38,16 +38,16 @@
             <div class="card">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
                     <h2 style="margin: 0;">チャット</h2>
-                    <div style="display: flex; gap: 20px; align-items: center;">
-                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="ドキュメントを参照して回答します">
-                            <input type="checkbox" id="ragToggle" checked style="width: 18px; height: 18px; cursor: pointer;">
-                            <span style="font-weight: 600; font-size: 0.95rem;">RAG使用</span>
-                            <span style="font-size: 0.75rem; color: #666;">(ドキュメント参照)</span>
+                    <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap;" title="ドキュメントを参照して回答します">
+                            <input type="checkbox" id="ragToggle" checked style="width: 18px; height: 18px; cursor: pointer; flex-shrink: 0;">
+                            <span style="font-weight: 600; font-size: 0.9rem;">RAG使用</span>
+                            <span style="font-size: 0.7rem; color: #666; display: none;" class="show-desktop">(ドキュメント参照)</span>
                         </label>
-                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="複数のクエリで検索して精度を上げます（処理が遅くなります）">
-                            <input type="checkbox" id="queryExpansionToggle" style="width: 18px; height: 18px; cursor: pointer;">
-                            <span style="font-weight: 600; font-size: 0.95rem;">クエリ拡張</span>
-                            <span style="font-size: 0.75rem; color: #666;">(高精度・低速)</span>
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap;" title="複数のクエリで検索して精度を上げます（処理が遅くなります）">
+                            <input type="checkbox" id="queryExpansionToggle" style="width: 18px; height: 18px; cursor: pointer; flex-shrink: 0;">
+                            <span style="font-weight: 600; font-size: 0.9rem;">クエリ拡張</span>
+                            <span style="font-size: 0.7rem; color: #666; display: none;" class="show-desktop">(高精度・低速)</span>
                         </label>
                     </div>
                 </div>
