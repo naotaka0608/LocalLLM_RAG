@@ -617,10 +617,25 @@ async function sendQuestion() {
     console.log('[DEBUG] Streaming message created and appended, children count:', messagesDiv.children.length);
 
     try {
+        // 現在のチャットから会話履歴を構築（最新10件のみ）
+        const currentChat = chatHistory.find(chat => chat.id === currentChatId);
+        const chatHistoryMessages = [];
+        if (currentChat && currentChat.messages) {
+            // 最新10件のメッセージを取得（今回の質問は除く）
+            const recentMessages = currentChat.messages.slice(-20); // 10往復分
+            for (const msg of recentMessages) {
+                chatHistoryMessages.push({
+                    role: msg.role,
+                    content: msg.content
+                });
+            }
+        }
+
         const requestBody = {
             question,
             use_rag: useRag,
             query_expansion: queryExpansion,
+            chat_history: chatHistoryMessages, // 会話履歴を追加
             // 主要パラメータ
             temperature: performanceSettings.temperature,
             document_count: performanceSettings.documentCount,

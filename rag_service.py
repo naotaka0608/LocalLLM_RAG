@@ -195,7 +195,7 @@ class RAGService:
         return Ollama(**params)
 
     def query(self, question: str, k: int = 5, model_name: str = None, use_rag: bool = True, enable_query_expansion: bool = False,
-              temperature: float = None, top_p: float = None, repeat_penalty: float = None,
+              chat_history: list = None, temperature: float = None, top_p: float = None, repeat_penalty: float = None,
               num_predict: int = None, top_k: int = None, num_ctx: int = None, seed: int = None,
               mirostat: int = None, mirostat_tau: float = None, mirostat_eta: float = None, tfs_z: float = None) -> Tuple[str, List[str], List[dict]]:
         """
@@ -272,8 +272,28 @@ class RAGService:
         # コンテキストの構築
         context = "\n\n".join([doc.page_content for doc in top_docs])
 
-        # プロンプトの構築
-        prompt_text = self.prompt.format(context=context, question=question)
+        # 会話履歴を含めたプロンプトの構築
+        if chat_history and len(chat_history) > 0:
+            # 会話履歴を文字列に変換
+            history_text = "\n".join([
+                f"{'ユーザー' if msg['role'] == 'user' else 'アシスタント'}: {msg['content']}"
+                for msg in chat_history[-10:]  # 最新10件のみ使用
+            ])
+
+            prompt_text = f"""以下は過去の会話履歴です：
+
+{history_text}
+
+以下の情報を参考にして、質問に答えてください：
+
+{context}
+
+質問: {question}
+
+回答:"""
+        else:
+            # 会話履歴がない場合は従来通り
+            prompt_text = self.prompt.format(context=context, question=question)
 
         # モデルの選択
         llm = self._create_ollama_instance(model_name, **llm_params)
@@ -343,7 +363,7 @@ class RAGService:
                             continue
 
     async def query_stream(self, question: str, k: int = 5, model_name: str = None, use_rag: bool = True, enable_query_expansion: bool = False,
-                          temperature: float = None, top_p: float = None, repeat_penalty: float = None,
+                          chat_history: list = None, temperature: float = None, top_p: float = None, repeat_penalty: float = None,
                           num_predict: int = None, top_k: int = None, num_ctx: int = None, seed: int = None,
                           mirostat: int = None, mirostat_tau: float = None, mirostat_eta: float = None, tfs_z: float = None):
         """
@@ -424,8 +444,28 @@ class RAGService:
         # コンテキストの構築
         context = "\n\n".join([doc.page_content for doc, _score in top_docs_with_scores])
 
-        # プロンプトの構築
-        prompt_text = self.prompt.format(context=context, question=question)
+        # 会話履歴を含めたプロンプトの構築
+        if chat_history and len(chat_history) > 0:
+            # 会話履歴を文字列に変換
+            history_text = "\n".join([
+                f"{'ユーザー' if msg['role'] == 'user' else 'アシスタント'}: {msg['content']}"
+                for msg in chat_history[-10:]  # 最新10件のみ使用
+            ])
+
+            prompt_text = f"""以下は過去の会話履歴です：
+
+{history_text}
+
+以下の情報を参考にして、質問に答えてください：
+
+{context}
+
+質問: {question}
+
+回答:"""
+        else:
+            # 会話履歴がない場合は従来通り
+            prompt_text = self.prompt.format(context=context, question=question)
 
         # ストリーミング生成
         async for chunk in self._stream_ollama_direct(prompt_text, model_name, **llm_params):

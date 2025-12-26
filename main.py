@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict
 import os
 from rag_service import RAGService
 
@@ -26,12 +26,17 @@ app.mount("/js", StaticFiles(directory="frontend/js"), name="js")
 rag_service = RAGService()
 
 
+class Message(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+
 class QueryRequest(BaseModel):
     question: str
     stream: bool = False
     model: Optional[str] = None
     use_rag: bool = True  # RAG使用のON/OFF
     query_expansion: bool = False
+    chat_history: Optional[List[Message]] = None  # 会話履歴
     # 主要パラメータ (★)
     temperature: Optional[float] = None
     document_count: Optional[int] = None
@@ -115,11 +120,15 @@ async def query(request: QueryRequest):
     質問に対してRAGで回答を生成（非ストリーミング）
     """
     try:
+        # 会話履歴を辞書形式に変換
+        chat_history = [{"role": msg.role, "content": msg.content} for msg in request.chat_history] if request.chat_history is not None else []
+
         answer, sources, source_scores = rag_service.query(
             request.question,
             model_name=request.model,
             use_rag=request.use_rag,
             enable_query_expansion=request.query_expansion,
+            chat_history=chat_history,
             temperature=request.temperature,
             k=request.document_count,
             top_p=request.top_p,
@@ -144,12 +153,16 @@ async def query_stream(request: QueryRequest):
     質問に対してRAGで回答を生成（ストリーミング）
     """
     try:
+        # 会話履歴を辞書形式に変換
+        chat_history = [{"role": msg.role, "content": msg.content} for msg in request.chat_history] if request.chat_history is not None else []
+
         async def generate():
             async for chunk in rag_service.query_stream(
                 request.question,
                 model_name=request.model,
                 use_rag=request.use_rag,
                 enable_query_expansion=request.query_expansion,
+                chat_history=chat_history,
                 temperature=request.temperature,
                 k=request.document_count,
                 top_p=request.top_p,
