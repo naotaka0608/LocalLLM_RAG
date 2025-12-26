@@ -13,6 +13,8 @@ from langchain_community.llms import Ollama
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
+import httpx
+import json
 
 
 class RAGService:
@@ -295,6 +297,51 @@ class RAGService:
 
         return answer, list(set(sources)), source_scores
 
+    async def _stream_ollama_direct(self, prompt: str, model_name: str = None, **llm_params):
+        """
+        Ollama APIを直接呼び出してリアルタイムストリーミング
+        """
+        if model_name is None:
+            model_name = self.model_name
+
+        # パラメータを準備（Noneでないもののみ）
+        options = {}
+        param_mapping = {
+            'temperature': 'temperature',
+            'top_p': 'top_p',
+            'top_k': 'top_k',
+            'repeat_penalty': 'repeat_penalty',
+            'num_predict': 'num_predict',
+            'num_ctx': 'num_ctx',
+            'seed': 'seed',
+            'mirostat': 'mirostat',
+            'mirostat_tau': 'mirostat_tau',
+            'mirostat_eta': 'mirostat_eta',
+            'tfs_z': 'tfs_z'
+        }
+
+        for param_key, ollama_key in param_mapping.items():
+            if param_key in llm_params and llm_params[param_key] is not None:
+                options[ollama_key] = llm_params[param_key]
+
+        payload = {
+            "model": model_name,
+            "prompt": prompt,
+            "stream": True,
+            "options": options
+        }
+
+        async with httpx.AsyncClient(timeout=300.0) as client:
+            async with client.stream('POST', 'http://localhost:11434/api/generate', json=payload) as response:
+                async for line in response.aiter_lines():
+                    if line:
+                        try:
+                            data = json.loads(line)
+                            if 'response' in data:
+                                yield data['response']
+                        except json.JSONDecodeError:
+                            continue
+
     async def query_stream(self, question: str, k: int = 5, model_name: str = None, use_rag: bool = True, enable_query_expansion: bool = False,
                           temperature: float = None, top_p: float = None, repeat_penalty: float = None,
                           num_predict: int = None, top_k: int = None, num_ctx: int = None, seed: int = None,
@@ -330,7 +377,6 @@ class RAGService:
         # RAG OFF の場合は直接LLMに質問
         if not use_rag:
             print("[DEBUG] RAG is disabled. Querying LLM directly without document context.")
-            llm = self._create_ollama_instance(model_name, **llm_params)
 
             simple_prompt = f"""あなたは親切で知識豊富なアシスタントです。以下の質問に答えてください。
 
@@ -338,7 +384,7 @@ class RAGService:
 
 回答:"""
 
-            for chunk in llm.stream(simple_prompt):
+            async for chunk in self._stream_ollama_direct(simple_prompt, model_name, **llm_params):
                 yield chunk
             return
 
@@ -360,17 +406,6 @@ class RAGService:
             except Exception as e:
                 print(f"[DEBUG] Error searching with query '{query}': {e}")
 
-        # パラメータをまとめる
-        llm_params = {
-            "temperature": temperature, "top_p": top_p, "repeat_penalty": repeat_penalty,
-            "num_predict": num_predict, "top_k": top_k, "num_ctx": num_ctx,
-            "seed": seed, "mirostat": mirostat, "mirostat_tau": mirostat_tau,
-            "mirostat_eta": mirostat_eta, "tfs_z": tfs_z
-        }
-
-        # モデルの選択
-        llm = self._create_ollama_instance(model_name, **llm_params)
-
         # ドキュメントがない場合
         if len(all_docs_with_scores) == 0:
             simple_prompt = f"""あなたは親切で知識豊富なアシスタントです。以下の質問に答えてください。
@@ -378,7 +413,7 @@ class RAGService:
 質問: {question}
 
 回答:"""
-            for chunk in llm.stream(simple_prompt):
+            async for chunk in self._stream_ollama_direct(simple_prompt, model_name, **llm_params):
                 yield chunk
             return
 
@@ -393,7 +428,7 @@ class RAGService:
         prompt_text = self.prompt.format(context=context, question=question)
 
         # ストリーミング生成
-        for chunk in llm.stream(prompt_text):
+        async for chunk in self._stream_ollama_direct(prompt_text, model_name, **llm_params):
             yield chunk
 
         # 参照元の抽出とスコア情報の作成（ストリーミング終了後に送信）

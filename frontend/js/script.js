@@ -734,7 +734,10 @@ async function sendQuestion() {
                     // 特定のメッセージのテキストエリアを取得
                     const textElement = specificMessageDiv.querySelector('[id^="streamingText-"]');
                     if (textElement) {
-                        textElement.textContent = fullAnswer;
+                        // テキストを表示（カーソルアニメーション付き）
+                        textElement.innerHTML = escapeHtml(fullAnswer) + '<span class="streaming-cursor">▊</span>';
+                        // 即座にスクロール
+                        messagesDiv.scrollTop = messagesDiv.scrollHeight;
                     }
 
                     // 速度を更新（リアルタイム）
@@ -749,6 +752,12 @@ async function sendQuestion() {
                     messagesDiv.scrollTop = messagesDiv.scrollHeight;
                 }
             }
+        }
+
+        // カーソルを削除して最終テキストを表示
+        const textElement = specificMessageDiv.querySelector('[id^="streamingText-"]');
+        if (textElement) {
+            textElement.innerHTML = escapeHtml(fullAnswer);
         }
 
         // 最終速度を表示
