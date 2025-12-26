@@ -30,6 +30,7 @@ class QueryRequest(BaseModel):
     question: str
     stream: bool = False
     model: Optional[str] = None
+    use_rag: bool = True  # RAG使用のON/OFF
     query_expansion: bool = False
     # 主要パラメータ (★)
     temperature: Optional[float] = None
@@ -117,6 +118,7 @@ async def query(request: QueryRequest):
         answer, sources, source_scores = rag_service.query(
             request.question,
             model_name=request.model,
+            use_rag=request.use_rag,
             enable_query_expansion=request.query_expansion,
             temperature=request.temperature,
             k=request.document_count,
@@ -146,6 +148,7 @@ async def query_stream(request: QueryRequest):
             async for chunk in rag_service.query_stream(
                 request.question,
                 model_name=request.model,
+                use_rag=request.use_rag,
                 enable_query_expansion=request.query_expansion,
                 temperature=request.temperature,
                 k=request.document_count,

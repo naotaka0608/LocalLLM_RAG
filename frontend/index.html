@@ -37,12 +37,20 @@
         <div id="chat-main" class="main-tab-content active">
             <div class="card">
                 <h2>チャット</h2>
-                <div style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 8px; display: flex; align-items: center; gap: 10px;">
+                <div style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 8px; display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                    <label style="font-weight: 600; color: #333; white-space: nowrap; display: flex; align-items: center; gap: 5px;">
+                        <input type="checkbox" id="ragToggle" checked style="width: 18px; height: 18px; cursor: pointer;">
+                        RAG使用
+                    </label>
+                    <span style="font-size: 0.8rem; color: #666;">（ドキュメント参照）</span>
+
+                    <div style="width: 1px; height: 20px; background: #ddd;"></div>
+
                     <label style="font-weight: 600; color: #333; white-space: nowrap; display: flex; align-items: center; gap: 5px;">
                         <input type="checkbox" id="queryExpansionToggle" style="width: 18px; height: 18px; cursor: pointer;">
                         クエリ拡張
                     </label>
-                    <span style="font-size: 0.8rem; color: #666;">（高精度だが遅い - 複雑な質問向け）</span>
+                    <span style="font-size: 0.8rem; color: #666;">（高精度だが遅い）</span>
                 </div>
                 <div class="chat-area">
                     <div class="chat-messages" id="chatMessages">

@@ -44,6 +44,7 @@ function saveChatHistory() {
 
 // 履歴を表示
 function renderChatHistory() {
+    console.log('[DEBUG] renderChatHistory called, currentChatId:', currentChatId, 'chatHistory.length:', chatHistory.length);
     const historyDiv = document.getElementById('chatHistory');
     if (chatHistory.length === 0) {
         historyDiv.innerHTML = '<div style="padding: 20px; text-align: center; color: #999; font-size: 0.85rem;">履歴がありません</div>';
@@ -62,6 +63,7 @@ function renderChatHistory() {
 
     // イベントリスナーを設定
     setupHistoryEventListeners();
+    console.log('[DEBUG] renderChatHistory completed');
 }
 
 // 履歴項目のイベントリスナーを設定
@@ -233,7 +235,7 @@ function loadChat(chatId) {
 
     // メッセージを復元
     const messagesDiv = document.getElementById('chatMessages');
-    messagesDiv.innerHTML = chat.messages.map(msg => {
+    messagesDiv.innerHTML = chat.messages.map((msg, index) => {
         let html = `
             <div class="message ${msg.type}">
                 <div class="message-header">${msg.sender}</div>
@@ -241,7 +243,7 @@ function loadChat(chatId) {
         `;
 
         if (msg.sources && msg.sources.length > 0) {
-            const sourceId = 'sources-' + Date.now() + Math.random();
+            const sourceId = `sources-${chatId}-${index}`;
 
             // スコア情報がある場合はスコアバー付きで表示
             let sourcesHTML = '';
@@ -259,7 +261,7 @@ function loadChat(chatId) {
 
             html += `
                 <div class="sources">
-                    <div class="sources-title" onclick="toggleSources('${sourceId}')">
+                    <div class="sources-title" data-source-id="${sourceId}">
                         <span class="sources-toggle collapsed" id="${sourceId}-toggle">▼</span>
                         参照元 (${msg.sources.length}件)
                         ${msg.sourceScores && msg.sourceScores.length > 0 ? '<span style="font-size: 0.75rem; color: #999; margin-left: 8px;">関連度スコア付き</span>' : ''}
@@ -275,17 +277,29 @@ function loadChat(chatId) {
         return html;
     }).join('');
 
+    // イベントハンドラを設定
+    document.querySelectorAll('.sources-title').forEach(titleElement => {
+        titleElement.addEventListener('click', function() {
+            const sourceId = this.getAttribute('data-source-id');
+            toggleSources(sourceId);
+        });
+    });
+
     renderChatHistory();
 }
 
 // 現在のチャットにメッセージを保存
 function saveMessageToHistory(sender, text, type, sources = null, sourceScores = null) {
     if (!currentChatId) {
-        createNewChat();
+        console.error('[DEBUG] saveMessageToHistory called without currentChatId');
+        return;
     }
 
     const chat = chatHistory.find(c => c.id === currentChatId);
-    if (!chat) return;
+    if (!chat) {
+        console.error('[DEBUG] Chat not found for currentChatId:', currentChatId);
+        return;
+    }
 
     chat.messages.push({ sender, text, type, sources, sourceScores });
 
@@ -560,12 +574,24 @@ async function sendQuestion() {
     const question = input.value.trim();
     const modelSelect = document.getElementById('modelSelectSettings');
     const selectedModel = modelSelect.value;
+    const ragToggle = document.getElementById('ragToggle');
+    const useRag = ragToggle.checked;
     const queryExpansionToggle = document.getElementById('queryExpansionToggle');
     const queryExpansion = queryExpansionToggle.checked;
 
     if (!question) return;
 
-    addMessage('あなた', question, 'user');
+    console.log('[DEBUG] sendQuestion started, currentChatId:', currentChatId);
+
+    // 現在のチャットIDがない場合は新規チャットを作成
+    if (!currentChatId) {
+        createNewChat();
+        console.log('[DEBUG] Created new chat, currentChatId:', currentChatId);
+    }
+
+    // ユーザーメッセージを追加（履歴保存は後でまとめて行う）
+    addMessage('あなた', question, 'user', null, null, false);
+    console.log('[DEBUG] Added user message to DOM (not saved to history yet)');
     input.value = '';
 
     // 入力フィールドを無効化
@@ -574,6 +600,7 @@ async function sendQuestion() {
 
     // ストリーミング用のメッセージを追加（ローディング表示付き）
     const messageId = 'streaming-' + Date.now();
+    console.log('[DEBUG] Creating streaming message with ID:', messageId);
     const messagesDiv = document.getElementById('chatMessages');
     const messageDiv = document.createElement('div');
     messageDiv.id = messageId;
@@ -587,10 +614,12 @@ async function sendQuestion() {
     `;
     messagesDiv.appendChild(messageDiv);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    console.log('[DEBUG] Streaming message created and appended, children count:', messagesDiv.children.length);
 
     try {
         const requestBody = {
             question,
+            use_rag: useRag,
             query_expansion: queryExpansion,
             // 主要パラメータ
             temperature: performanceSettings.temperature,
@@ -628,17 +657,31 @@ async function sendQuestion() {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let fullAnswer = '';
-        const contentDiv = messageDiv.querySelector('.streaming-content');
+        // 特定のメッセージIDでDIVを取得（確実に正しいDIVを参照）
+        const specificMessageDiv = document.getElementById(messageId);
+        if (!specificMessageDiv) {
+            console.error('[DEBUG] Could not find message div with ID:', messageId);
+            return;
+        }
+        const contentDiv = specificMessageDiv.querySelector('.streaming-content');
         let isFirstChunk = true;
 
         // 速度計測用の変数
         let startTime = null;
-        let tokenCount = 0;
+        let charCount = 0;  // 文字数カウント（トークン数の近似値として使用）
         let speedDisplay = null;
 
+        // 参照元情報を保存する変数
+        let sourcesData = null;
+        let sourceScores = null;
+
+        console.log('[DEBUG] Starting to read streaming response');
         while (true) {
             const { done, value } = await reader.read();
-            if (done) break;
+            if (done) {
+                console.log('[DEBUG] Streaming completed');
+                break;
+            }
 
             const chunk = decoder.decode(value);
             const lines = chunk.split('\n');
@@ -647,8 +690,23 @@ async function sendQuestion() {
                 if (line.startsWith('data: ')) {
                     const content = line.slice(6);
 
+                    // 参照元情報をチェック（特別なマーカー）
+                    if (content.includes('__SOURCES__:')) {
+                        try {
+                            const jsonStr = content.split('__SOURCES__:')[1];
+                            const sourceInfo = JSON.parse(jsonStr);
+                            sourcesData = sourceInfo.sources;
+                            sourceScores = sourceInfo.source_scores;
+                            // 参照元情報は回答に含めない
+                            continue;
+                        } catch (e) {
+                            console.error('Failed to parse source info:', e);
+                        }
+                    }
+
                     // 最初のチャンクでローディング表示をクリアし、速度表示を追加
                     if (isFirstChunk && content) {
+                        console.log('[DEBUG] First chunk received, clearing loading display');
                         contentDiv.innerHTML = '';
 
                         // 速度表示エリアを追加
@@ -658,27 +716,33 @@ async function sendQuestion() {
                         contentDiv.appendChild(speedDisplay);
 
                         const textContent = document.createElement('div');
-                        textContent.id = 'streamingText';
+                        textContent.id = 'streamingText-' + messageId;  // ユニークなIDを使用
                         contentDiv.appendChild(textContent);
 
                         startTime = Date.now();
                         isFirstChunk = false;
+                        console.log('[DEBUG] First chunk processed, streaming UI ready');
+                    }
+
+                    // 文字数をカウント（実際の生成されたテキスト量）
+                    if (content.length > 0) {
+                        charCount += content.length;
                     }
 
                     fullAnswer += content;
-                    tokenCount += content.length > 0 ? 1 : 0;
 
-                    const textElement = document.getElementById('streamingText');
+                    // 特定のメッセージのテキストエリアを取得
+                    const textElement = specificMessageDiv.querySelector('[id^="streamingText-"]');
                     if (textElement) {
                         textElement.textContent = fullAnswer;
                     }
 
-                    // 速度を更新（0.5秒ごと）
-                    if (startTime && speedDisplay && tokenCount > 0) {
+                    // 速度を更新（リアルタイム）
+                    if (startTime && speedDisplay && charCount > 0) {
                         const elapsed = (Date.now() - startTime) / 1000;
                         if (elapsed > 0) {
-                            const speed = (tokenCount / elapsed).toFixed(1);
-                            speedDisplay.textContent = `⚡ ${speed} トークン/秒`;
+                            const speed = (charCount / elapsed).toFixed(1);
+                            speedDisplay.textContent = `⚡ ${speed} 文字/秒`;
                         }
                     }
 
@@ -688,21 +752,75 @@ async function sendQuestion() {
         }
 
         // 最終速度を表示
-        if (startTime && speedDisplay && tokenCount > 0) {
+        if (startTime && speedDisplay && charCount > 0) {
             const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
-            const avgSpeed = (tokenCount / (totalTime)).toFixed(1);
-            speedDisplay.textContent = `✓ 完了: ${avgSpeed} トークン/秒 (${totalTime}秒, ${tokenCount}トークン)`;
+            const avgSpeed = (charCount / totalTime).toFixed(1);
+            speedDisplay.textContent = `✓ 完了: ${avgSpeed} 文字/秒 (${totalTime}秒, ${charCount}文字)`;
             speedDisplay.style.background = '#e8f5e9';
             speedDisplay.style.color = '#2e7d32';
         }
 
-        // 履歴に保存
-        saveMessageToHistory('アシスタント', fullAnswer, 'assistant', null);
+        // 参照元を表示
+        if (sourcesData && sourcesData.length > 0) {
+            const sourcesDiv = document.createElement('div');
+            sourcesDiv.className = 'sources';
+            sourcesDiv.style.marginTop = '12px';
+
+            const sourcesHeader = document.createElement('div');
+            sourcesHeader.style.cssText = 'font-size: 0.85rem; color: #666; margin-bottom: 8px; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px;';
+            sourcesHeader.innerHTML = '<span class="source-toggle">▼</span> <strong>参照元:</strong>';
+
+            const sourcesList = document.createElement('div');
+            sourcesList.className = 'sources-list';
+            sourcesList.style.display = 'block';
+
+            // スコア情報付きで表示
+            if (sourceScores && sourceScores.length > 0) {
+                sourceScores.forEach(item => {
+                    const sourceItem = document.createElement('div');
+                    sourceItem.style.cssText = 'font-size: 0.8rem; color: #555; margin: 4px 0;';
+                    sourceItem.innerHTML = `• ${item.source}${createScoreBar(item.score)}`;
+                    sourcesList.appendChild(sourceItem);
+                });
+            } else {
+                // スコアなしの場合
+                sourcesData.forEach(source => {
+                    const sourceItem = document.createElement('div');
+                    sourceItem.style.cssText = 'font-size: 0.8rem; color: #555; margin: 4px 0;';
+                    sourceItem.textContent = `• ${source}`;
+                    sourcesList.appendChild(sourceItem);
+                });
+            }
+
+            sourcesDiv.appendChild(sourcesHeader);
+            sourcesDiv.appendChild(sourcesList);
+            contentDiv.appendChild(sourcesDiv);
+
+            // クリックで折りたたみ
+            sourcesHeader.addEventListener('click', () => {
+                const isVisible = sourcesList.style.display !== 'none';
+                sourcesList.style.display = isVisible ? 'none' : 'block';
+                sourcesHeader.querySelector('.source-toggle').textContent = isVisible ? '▶' : '▼';
+            });
+        }
+
+        // 履歴に保存（ユーザーメッセージとアシスタントメッセージの両方）
+        console.log('[DEBUG] Saving messages to history, question:', question, 'currentChatId:', currentChatId);
+        console.log('[DEBUG] Chat messages div children count before save:', document.getElementById('chatMessages').children.length);
+        saveMessageToHistory('あなた', question, 'user');
+        saveMessageToHistory('アシスタント', fullAnswer, 'assistant', sourcesData, sourceScores);
+        console.log('[DEBUG] Messages saved to history');
+        console.log('[DEBUG] Chat messages div children count after save:', document.getElementById('chatMessages').children.length);
 
     } catch (error) {
         console.error('Error:', error);
-        const contentDiv = messageDiv.querySelector('.streaming-content');
-        contentDiv.textContent = `エラー: ${error.message}`;
+        const errorMessageDiv = document.getElementById(messageId);
+        if (errorMessageDiv) {
+            const contentDiv = errorMessageDiv.querySelector('.streaming-content');
+            if (contentDiv) {
+                contentDiv.textContent = `エラー: ${error.message}`;
+            }
+        }
     } finally {
         // 入力フィールドを再び有効化
         input.disabled = false;
@@ -760,7 +878,7 @@ function createScoreBar(score) {
 }
 
 // メッセージ追加
-function addMessage(sender, text, type = 'assistant', sources = null, sourceScores = null) {
+function addMessage(sender, text, type = 'assistant', sources = null, sourceScores = null, saveToHistory = true) {
     const messagesDiv = document.getElementById('chatMessages');
     const messageDiv = document.createElement('div');
 
@@ -793,7 +911,7 @@ function addMessage(sender, text, type = 'assistant', sources = null, sourceScor
 
         html += `
             <div class="sources">
-                <div class="sources-title" onclick="toggleSources('${sourceId}')">
+                <div class="sources-title" data-source-id="${sourceId}">
                     <span class="sources-toggle collapsed" id="${sourceId}-toggle">▼</span>
                     参照元 (${sources.length}件)
                     ${sourceScores && sourceScores.length > 0 ? '<span style="font-size: 0.75rem; color: #999; margin-left: 8px;">関連度スコア付き</span>' : ''}
@@ -809,8 +927,21 @@ function addMessage(sender, text, type = 'assistant', sources = null, sourceScor
     messagesDiv.appendChild(messageDiv);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
 
-    // 履歴に保存
-    saveMessageToHistory(sender, text, type, sources, sourceScores);
+    // イベントハンドラを設定（参照元がある場合）
+    if (sources && sources.length > 0) {
+        const titleElement = messageDiv.querySelector('.sources-title');
+        if (titleElement) {
+            titleElement.addEventListener('click', function() {
+                const sourceId = this.getAttribute('data-source-id');
+                toggleSources(sourceId);
+            });
+        }
+    }
+
+    // 履歴に保存（フラグがtrueの場合のみ）
+    if (saveToHistory) {
+        saveMessageToHistory(sender, text, type, sources, sourceScores);
+    }
 }
 
 // 参照元の開閉

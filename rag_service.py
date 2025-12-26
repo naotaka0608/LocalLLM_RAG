@@ -192,7 +192,7 @@ class RAGService:
 
         return Ollama(**params)
 
-    def query(self, question: str, k: int = 5, model_name: str = None, enable_query_expansion: bool = False,
+    def query(self, question: str, k: int = 5, model_name: str = None, use_rag: bool = True, enable_query_expansion: bool = False,
               temperature: float = None, top_p: float = None, repeat_penalty: float = None,
               num_predict: int = None, top_k: int = None, num_ctx: int = None, seed: int = None,
               mirostat: int = None, mirostat_tau: float = None, mirostat_eta: float = None, tfs_z: float = None) -> Tuple[str, List[str], List[dict]]:
@@ -203,6 +203,7 @@ class RAGService:
             question: 質問文
             k: 最終的に使用する関連文書の数（デフォルト: 5）
             model_name: 使用するモデル名（Noneの場合はデフォルトモデルを使用）
+            use_rag: RAGを使用するか（Falseの場合は直接LLMに質問）
             enable_query_expansion: クエリ拡張を有効にするか（デフォルト: False）
             temperature: LLMの温度パラメータ（Noneの場合はデフォルト0.3を使用）
             top_p: Nucleus samplingパラメータ（Noneの場合はデフォルト0.9を使用）
@@ -213,6 +214,7 @@ class RAGService:
         """
         print(f"[DEBUG] Query received: {question}")
         print(f"[DEBUG] Model: {model_name if model_name else f'default ({self.model_name})'}")
+        print(f"[DEBUG] Use RAG: {use_rag}")
         print(f"[DEBUG] Query expansion: {enable_query_expansion}")
 
         # クエリ拡張
@@ -293,7 +295,7 @@ class RAGService:
 
         return answer, list(set(sources)), source_scores
 
-    async def query_stream(self, question: str, k: int = 5, model_name: str = None, enable_query_expansion: bool = False,
+    async def query_stream(self, question: str, k: int = 5, model_name: str = None, use_rag: bool = True, enable_query_expansion: bool = False,
                           temperature: float = None, top_p: float = None, repeat_penalty: float = None,
                           num_predict: int = None, top_k: int = None, num_ctx: int = None, seed: int = None,
                           mirostat: int = None, mirostat_tau: float = None, mirostat_eta: float = None, tfs_z: float = None):
@@ -304,6 +306,7 @@ class RAGService:
             question: 質問文
             k: 取得する関連文書の数（デフォルト: 5）
             model_name: 使用するモデル名（Noneの場合はデフォルトモデルを使用）
+            use_rag: RAGを使用するか（Falseの場合は直接LLMに質問）
             enable_query_expansion: クエリ拡張を有効にするか（デフォルト: False）
             temperature: LLMの温度パラメータ（Noneの場合はデフォルト0.3を使用）
             top_p: Nucleus samplingパラメータ（Noneの場合はデフォルト0.9を使用）
@@ -313,7 +316,31 @@ class RAGService:
             回答のチャンク
         """
         print(f"[DEBUG] Stream query received: {question}")
+        print(f"[DEBUG] Use RAG: {use_rag}")
         print(f"[DEBUG] Query expansion: {enable_query_expansion}")
+
+        # パラメータをまとめる
+        llm_params = {
+            "temperature": temperature, "top_p": top_p, "repeat_penalty": repeat_penalty,
+            "num_predict": num_predict, "top_k": top_k, "num_ctx": num_ctx,
+            "seed": seed, "mirostat": mirostat, "mirostat_tau": mirostat_tau,
+            "mirostat_eta": mirostat_eta, "tfs_z": tfs_z
+        }
+
+        # RAG OFF の場合は直接LLMに質問
+        if not use_rag:
+            print("[DEBUG] RAG is disabled. Querying LLM directly without document context.")
+            llm = self._create_ollama_instance(model_name, **llm_params)
+
+            simple_prompt = f"""あなたは親切で知識豊富なアシスタントです。以下の質問に答えてください。
+
+質問: {question}
+
+回答:"""
+
+            for chunk in llm.stream(simple_prompt):
+                yield chunk
+            return
 
         # クエリ拡張
         queries = self._expand_query(question) if enable_query_expansion else [question]
@@ -357,10 +384,10 @@ class RAGService:
 
         # スコアでソートして上位を選択
         all_docs_with_scores.sort(key=lambda x: x[1])
-        top_docs = [doc for doc, _score in all_docs_with_scores[:k]]
+        top_docs_with_scores = all_docs_with_scores[:k]
 
         # コンテキストの構築
-        context = "\n\n".join([doc.page_content for doc in top_docs])
+        context = "\n\n".join([doc.page_content for doc, _score in top_docs_with_scores])
 
         # プロンプトの構築
         prompt_text = self.prompt.format(context=context, question=question)
@@ -368,6 +395,27 @@ class RAGService:
         # ストリーミング生成
         for chunk in llm.stream(prompt_text):
             yield chunk
+
+        # 参照元の抽出とスコア情報の作成（ストリーミング終了後に送信）
+        import json
+        sources = []
+        source_scores = []
+        for doc, score in top_docs_with_scores:
+            source = doc.metadata.get("source_file", "Unknown")
+            page = doc.metadata.get("page", "Unknown")
+            source_str = f"{source} (Page {page})"
+            sources.append(source_str)
+
+            # スコアを0-1の範囲に正規化
+            normalized_score = max(0, min(1, 1 - (score / 2)))
+            source_scores.append({"source": source_str, "score": round(normalized_score, 3)})
+
+        # 参照元情報を最後に送信（特別なマーカーで識別）
+        source_data = {
+            "sources": list(set(sources)),
+            "source_scores": source_scores
+        }
+        yield f"\n__SOURCES__:{json.dumps(source_data, ensure_ascii=False)}"
 
     def list_documents(self) -> List[str]:
         """
