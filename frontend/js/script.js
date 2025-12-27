@@ -624,9 +624,12 @@ async function sendQuestion() {
             // 最新10件のメッセージを取得（今回の質問は除く）
             const recentMessages = currentChat.messages.slice(-20); // 10往復分
             for (const msg of recentMessages) {
+                // メッセージ形式を { role, content } に変換
+                const role = msg.type === 'user' ? 'user' : 'assistant';
+                const content = msg.text;
                 chatHistoryMessages.push({
-                    role: msg.role,
-                    content: msg.content
+                    role: role,
+                    content: content
                 });
             }
         }

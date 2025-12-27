@@ -304,15 +304,29 @@ class RAGService:
         # 参照元の抽出とスコア情報の作成
         sources = []
         source_scores = []
+
+        # まず全スコアの範囲を取得して正規化
+        if len(top_docs_with_scores) > 0:
+            scores_only = [score for _, score in top_docs_with_scores]
+            min_score = min(scores_only)
+            max_score = max(scores_only)
+            score_range = max_score - min_score if max_score != min_score else 1
+
         for doc, score in top_docs_with_scores:
             source = doc.metadata.get("source_file", "Unknown")
-            page = doc.metadata.get("page", "Unknown")
-            source_str = f"{source} (Page {page})"
+            page = doc.metadata.get("page")
+
+            # ページ番号の処理（PDFの場合はあり、TXT/MD/CSVの場合はなし）
+            if page is not None:
+                source_str = f"{source} (Page {page})"
+            else:
+                source_str = source
+
             sources.append(source_str)
 
-            # スコアを0-1の範囲に正規化（ChromaDBのスコアは距離なので、小さいほど良い）
-            # 0に近いほど関連度が高いので、1 - (score / max_score)で正規化
-            normalized_score = max(0, min(1, 1 - (score / 2)))
+            # スコアを0-100%の範囲に正規化（L2距離: 小さいほど良い）
+            # 最小値を100%、最大値を0%として線形補間
+            normalized_score = 1 - ((score - min_score) / score_range)
             source_scores.append({"source": source_str, "score": round(normalized_score, 3)})
 
         return answer, list(set(sources)), source_scores
@@ -475,14 +489,29 @@ class RAGService:
         import json
         sources = []
         source_scores = []
+
+        # まず全スコアの範囲を取得して正規化
+        if len(top_docs_with_scores) > 0:
+            scores_only = [score for _, score in top_docs_with_scores]
+            min_score = min(scores_only)
+            max_score = max(scores_only)
+            score_range = max_score - min_score if max_score != min_score else 1
+
         for doc, score in top_docs_with_scores:
             source = doc.metadata.get("source_file", "Unknown")
-            page = doc.metadata.get("page", "Unknown")
-            source_str = f"{source} (Page {page})"
+            page = doc.metadata.get("page")
+
+            # ページ番号の処理（PDFの場合はあり、TXT/MD/CSVの場合はなし）
+            if page is not None:
+                source_str = f"{source} (Page {page})"
+            else:
+                source_str = source
+
             sources.append(source_str)
 
-            # スコアを0-1の範囲に正規化
-            normalized_score = max(0, min(1, 1 - (score / 2)))
+            # スコアを0-100%の範囲に正規化（L2距離: 小さいほど良い）
+            # 最小値を100%、最大値を0%として線形補間
+            normalized_score = 1 - ((score - min_score) / score_range)
             source_scores.append({"source": source_str, "score": round(normalized_score, 3)})
 
         # 参照元情報を最後に送信（特別なマーカーで識別）

@@ -176,7 +176,8 @@ async def query_stream(request: QueryRequest):
                 mirostat_eta=request.mirostat_eta,
                 tfs_z=request.tfs_z
             ):
-                yield f"data: {chunk}\n\n"
+                # チャンクの先頭の改行を削除してから送信
+                yield f"data: {chunk.lstrip()}\n\n"
 
         return StreamingResponse(generate(), media_type="text/event-stream")
     except Exception as e:
