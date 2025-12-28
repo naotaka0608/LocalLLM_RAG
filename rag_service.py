@@ -15,6 +15,8 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 import httpx
 import json
+from rank_bm25 import BM25Okapi
+import re
 
 
 class RAGService:
@@ -95,6 +97,77 @@ class RAGService:
             input_variables=["context", "question"]
         )
 
+        # BM25用のドキュメントキャッシュ
+        self.bm25_corpus = []  # トークン化されたドキュメント
+        self.bm25_docs = []    # 元のドキュメントオブジェクト
+        self.bm25_index = None
+        self._rebuild_bm25_index()
+
+    def _tokenize_japanese(self, text: str) -> List[str]:
+        """
+        日本語テキストを単純にトークン化
+        文字種（ひらがな、カタカナ、漢字、英数字）で分割
+
+        Args:
+            text: トークン化するテキスト
+
+        Returns:
+            トークンのリスト
+        """
+        # 1文字以上の連続する文字種でトークンを作成
+        tokens = []
+        # 日本語文字（ひらがな、カタカナ、漢字）+ 英数字 + 記号を考慮
+        pattern = r'[一-龥ぁ-んァ-ヴー]+|[a-zA-Z0-9]+|[0-9]+(?:\.[0-9]+)?'
+        tokens = re.findall(pattern, text.lower())
+        return tokens
+
+    def _rebuild_bm25_index(self):
+        """
+        現在のベクトルストアからBM25インデックスを再構築
+        """
+        try:
+            collection = self.vectorstore._collection
+            all_data = collection.get()
+
+            if not all_data['ids']:
+                print("[DEBUG] No documents in vectorstore, BM25 index is empty")
+                self.bm25_corpus = []
+                self.bm25_docs = []
+                self.bm25_index = None
+                return
+
+            # ドキュメントを取得してトークン化
+            self.bm25_corpus = []
+            self.bm25_docs = []
+
+            for i, doc_id in enumerate(all_data['ids']):
+                text = all_data['documents'][i]
+                metadata = all_data['metadatas'][i] if all_data['metadatas'] else {}
+
+                # Documentオブジェクトを再構築
+                from langchain_core.documents import Document
+                doc = Document(page_content=text, metadata=metadata)
+
+                # トークン化
+                tokens = self._tokenize_japanese(text)
+
+                self.bm25_corpus.append(tokens)
+                self.bm25_docs.append(doc)
+
+            # BM25インデックスを構築
+            if self.bm25_corpus:
+                self.bm25_index = BM25Okapi(self.bm25_corpus)
+                print(f"[DEBUG] BM25 index built with {len(self.bm25_corpus)} documents")
+            else:
+                self.bm25_index = None
+                print("[DEBUG] BM25 corpus is empty")
+
+        except Exception as e:
+            print(f"[DEBUG] Error building BM25 index: {e}")
+            self.bm25_corpus = []
+            self.bm25_docs = []
+            self.bm25_index = None
+
     def add_documents(self, file_path: str) -> None:
         """
         ファイルを読み込んでベクトルストアに追加
@@ -145,6 +218,9 @@ class RAGService:
         except Exception as e:
             print(f"[DEBUG] Error counting documents: {e}")
 
+        # BM25インデックスを再構築
+        self._rebuild_bm25_index()
+
     def _expand_query(self, question: str) -> List[str]:
         """
         クエリを拡張して関連するキーワードを生成
@@ -173,6 +249,106 @@ class RAGService:
         except Exception as e:
             print(f"[DEBUG] Query expansion failed: {e}, using original question only")
             return [question]
+
+    def _hybrid_search(self, question: str, k: int = 5, vector_weight: float = 0.5) -> List[Tuple]:
+        """
+        BM25とベクトル検索を組み合わせたハイブリッド検索
+
+        Args:
+            question: 検索クエリ
+            k: 取得するドキュメント数
+            vector_weight: ベクトル検索の重み (0.0-1.0)、BM25の重みは (1 - vector_weight)
+
+        Returns:
+            (Document, スコア)のタプルのリスト
+        """
+        print(f"[DEBUG] Hybrid search: question='{question}', k={k}, vector_weight={vector_weight}")
+
+        # 1. ベクトル検索
+        vector_results = []
+        try:
+            # より多くの候補を取得
+            vector_docs = self.vectorstore.similarity_search_with_score(question, k=k*3)
+            vector_results = vector_docs
+            print(f"[DEBUG] Vector search returned {len(vector_results)} results")
+        except Exception as e:
+            print(f"[DEBUG] Vector search error: {e}")
+
+        # 2. BM25検索
+        bm25_results = []
+        if self.bm25_index and self.bm25_docs:
+            try:
+                # クエリをトークン化
+                query_tokens = self._tokenize_japanese(question)
+                print(f"[DEBUG] Query tokens: {query_tokens}")
+
+                # BM25スコアを取得
+                bm25_scores = self.bm25_index.get_scores(query_tokens)
+
+                # スコア順でソート
+                doc_score_pairs = list(zip(self.bm25_docs, bm25_scores))
+                doc_score_pairs.sort(key=lambda x: x[1], reverse=True)
+
+                # 上位k*3件を取得
+                bm25_results = doc_score_pairs[:k*3]
+                print(f"[DEBUG] BM25 search returned {len(bm25_results)} results")
+                if bm25_results:
+                    print(f"[DEBUG] BM25 top 5 scores: {[score for _, score in bm25_results[:5]]}")
+            except Exception as e:
+                print(f"[DEBUG] BM25 search error: {e}")
+        else:
+            print("[DEBUG] BM25 index not available")
+
+        # 3. スコアの正規化と統合
+        combined_scores = {}
+
+        # ベクトル検索結果を正規化 (L2距離: 小さいほど良い)
+        if vector_results:
+            vector_scores_only = [score for _, score in vector_results]
+            min_vec = min(vector_scores_only)
+            max_vec = max(vector_scores_only)
+            vec_range = max_vec - min_vec if max_vec != min_vec else 1
+
+            for doc, score in vector_results:
+                # L2距離を0-1のスコアに変換（小さいほど高スコア）
+                normalized = 1 - ((score - min_vec) / vec_range)
+                doc_id = id(doc)
+                if doc_id not in combined_scores:
+                    combined_scores[doc_id] = {"doc": doc, "vector": 0, "bm25": 0}
+                combined_scores[doc_id]["vector"] = normalized
+
+        # BM25結果を正規化 (大きいほど良い)
+        if bm25_results:
+            bm25_scores_only = [score for _, score in bm25_results]
+            min_bm25 = min(bm25_scores_only)
+            max_bm25 = max(bm25_scores_only)
+            bm25_range = max_bm25 - min_bm25 if max_bm25 != min_bm25 else 1
+
+            for doc, score in bm25_results:
+                # BM25スコアを0-1に正規化
+                normalized = (score - min_bm25) / bm25_range if bm25_range > 0 else 0
+                doc_id = id(doc)
+                if doc_id not in combined_scores:
+                    combined_scores[doc_id] = {"doc": doc, "vector": 0, "bm25": 0}
+                combined_scores[doc_id]["bm25"] = normalized
+
+        # 4. 重み付けして最終スコアを計算
+        final_results = []
+        bm25_weight = 1 - vector_weight
+
+        for doc_id, scores in combined_scores.items():
+            final_score = (scores["vector"] * vector_weight) + (scores["bm25"] * bm25_weight)
+            final_results.append((scores["doc"], final_score))
+            print(f"[DEBUG] Doc (vec={scores['vector']:.3f}, bm25={scores['bm25']:.3f}) -> final={final_score:.3f}")
+
+        # スコア順でソート（高い方が良い）
+        final_results.sort(key=lambda x: x[1], reverse=True)
+
+        # 上位k件を返す
+        top_results = final_results[:k]
+        print(f"[DEBUG] Hybrid search returning top {len(top_results)} results")
+
+        return top_results
 
     def _create_ollama_instance(self, model_name: str = None, **kwargs):
         """Ollamaインスタンスを作成するヘルパーメソッド"""
@@ -406,7 +582,7 @@ class RAGService:
                             continue
 
     async def query_stream(self, question: str, k: int = 5, search_multiplier: int = 10, model_name: str = None, use_rag: bool = True, enable_query_expansion: bool = False,
-                          chat_history: list = None, temperature: float = None, top_p: float = None, repeat_penalty: float = None,
+                          use_hybrid_search: bool = True, chat_history: list = None, temperature: float = None, top_p: float = None, repeat_penalty: float = None,
                           num_predict: int = None, top_k: int = None, num_ctx: int = None, seed: int = None,
                           mirostat: int = None, mirostat_tau: float = None, mirostat_eta: float = None, tfs_z: float = None):
         """
@@ -418,6 +594,7 @@ class RAGService:
             model_name: 使用するモデル名（Noneの場合はデフォルトモデルを使用）
             use_rag: RAGを使用するか（Falseの場合は直接LLMに質問）
             enable_query_expansion: クエリ拡張を有効にするか（デフォルト: False）
+            use_hybrid_search: ハイブリッド検索（BM25 + ベクトル）を使用するか（デフォルト: True）
             temperature: LLMの温度パラメータ（Noneの場合はデフォルト0.3を使用）
             top_p: Nucleus samplingパラメータ（Noneの場合はデフォルト0.9を使用）
             repeat_penalty: 繰り返しペナルティ（Noneの場合はデフォルト1.1を使用）
@@ -428,6 +605,7 @@ class RAGService:
         print(f"[DEBUG] Stream query received: {question}")
         print(f"[DEBUG] Use RAG: {use_rag}")
         print(f"[DEBUG] Query expansion: {enable_query_expansion}")
+        print(f"[DEBUG] Hybrid search: {use_hybrid_search}")
 
         # ベクトルストアの内容を確認
         try:
@@ -474,20 +652,44 @@ class RAGService:
         # クエリ拡張
         queries = self._expand_query(question) if enable_query_expansion else [question]
 
-        # 各クエリで検索を実行
+        # 検索実行（ハイブリッドまたはベクトル検索）
         all_docs_with_scores = []
         seen_content = set()
 
-        for query in queries:
-            try:
-                docs_with_scores = self.vectorstore.similarity_search_with_score(query, k=k * search_multiplier)
-                for doc, score in docs_with_scores:
-                    content_hash = hash(doc.page_content[:200])
-                    if content_hash not in seen_content:
-                        seen_content.add(content_hash)
-                        all_docs_with_scores.append((doc, score))
-            except Exception as e:
-                print(f"[DEBUG] Error searching with query '{query}': {e}")
+        if use_hybrid_search:
+            # ハイブリッド検索を使用
+            print("[DEBUG] Using hybrid search (BM25 + Vector)")
+            for query in queries:
+                try:
+                    docs_with_scores = self._hybrid_search(query, k=k * search_multiplier, vector_weight=0.5)
+                    for doc, score in docs_with_scores:
+                        content_hash = hash(doc.page_content[:200])
+                        if content_hash not in seen_content:
+                            seen_content.add(content_hash)
+                            all_docs_with_scores.append((doc, score))
+                except Exception as e:
+                    print(f"[DEBUG] Hybrid search error with query '{query}': {e}")
+                    # フォールバック: ベクトル検索のみ
+                    print("[DEBUG] Falling back to vector search only")
+                    docs_with_scores = self.vectorstore.similarity_search_with_score(query, k=k * search_multiplier)
+                    for doc, score in docs_with_scores:
+                        content_hash = hash(doc.page_content[:200])
+                        if content_hash not in seen_content:
+                            seen_content.add(content_hash)
+                            all_docs_with_scores.append((doc, score))
+        else:
+            # 従来のベクトル検索のみ
+            print("[DEBUG] Using vector search only")
+            for query in queries:
+                try:
+                    docs_with_scores = self.vectorstore.similarity_search_with_score(query, k=k * search_multiplier)
+                    for doc, score in docs_with_scores:
+                        content_hash = hash(doc.page_content[:200])
+                        if content_hash not in seen_content:
+                            seen_content.add(content_hash)
+                            all_docs_with_scores.append((doc, score))
+                except Exception as e:
+                    print(f"[DEBUG] Error searching with query '{query}': {e}")
 
         # ドキュメントがない場合
         if len(all_docs_with_scores) == 0:
@@ -501,7 +703,11 @@ class RAGService:
             return
 
         # スコアでソートして上位を選択
-        all_docs_with_scores.sort(key=lambda x: x[1])
+        # ハイブリッド検索の場合は降順（高いほど良い）、ベクトル検索の場合は昇順（低いほど良い）
+        if use_hybrid_search:
+            all_docs_with_scores.sort(key=lambda x: x[1], reverse=True)
+        else:
+            all_docs_with_scores.sort(key=lambda x: x[1])
 
         # デバッグ: 検索結果の上位20件を表示
         print(f"[DEBUG] Top 20 search results:")
@@ -574,9 +780,15 @@ class RAGService:
 
             sources.append(source_str)
 
-            # スコアを0-100%の範囲に正規化（L2距離: 小さいほど良い）
-            # 最小値を100%、最大値を0%として線形補間
-            normalized_score = 1 - ((score - min_score) / score_range)
+            # スコアを0-100%の範囲に正規化
+            if use_hybrid_search:
+                # ハイブリッド検索: 高いほど良い（0-1のスコア）
+                # 最大値を100%、最小値を0%として線形補間
+                normalized_score = (score - min_score) / score_range if score_range > 0 else 1.0
+            else:
+                # ベクトル検索: L2距離（小さいほど良い）
+                # 最小値を100%、最大値を0%として線形補間
+                normalized_score = 1 - ((score - min_score) / score_range)
             source_scores.append({"source": source_str, "score": round(normalized_score, 3)})
 
         # 参照元情報を最後に送信（特別なマーカーで識別）
@@ -637,6 +849,8 @@ class RAGService:
             if ids_to_delete:
                 collection.delete(ids=ids_to_delete)
                 print(f"[DEBUG] Deleted {len(ids_to_delete)} chunks from {filename}")
+                # BM25インデックスを再構築
+                self._rebuild_bm25_index()
                 return True
             else:
                 print(f"[DEBUG] No chunks found for {filename}")

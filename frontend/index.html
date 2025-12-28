@@ -183,6 +183,27 @@
                     </div>
 
                     <div style="margin-bottom: 15px;">
+                        <label style="font-size: 0.9rem; color: #333; display: flex; align-items: center; cursor: pointer;">
+                            <input type="checkbox" id="hybridSearchCheckbox" checked onchange="updateHybridSearch(this.checked)"
+                                   style="width: 20px; height: 20px; margin-right: 10px; cursor: pointer;">
+                            <span>★ ハイブリッド検索 (BM25 + ベクトル)</span>
+                            <div class="tooltip-container">
+                                <span class="tooltip-icon">?</span>
+                                <div class="tooltip-text">
+                                    <strong>ハイブリッド検索</strong><br>
+                                    BM25（キーワード検索）とベクトル検索を組み合わせた高精度検索
+                                    <ul>
+                                        <li><strong>ON</strong>: 日本語キーワード（例: EMC試験）の検索精度が大幅に向上。推奨設定</li>
+                                        <li><strong>OFF</strong>: ベクトル検索のみ。セマンティック検索に特化</li>
+                                    </ul>
+                                    推奨: ONで使用
+                                </div>
+                            </div>
+                        </label>
+                        <div style="font-size: 0.75rem; color: #999; margin-top: 5px;">日本語キーワード検索の精度向上。通常はON推奨</div>
+                    </div>
+
+                    <div style="margin-bottom: 15px;">
                         <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
                             ★ Top-P (多様性): <span id="topPValue">0.9</span>
                             <div class="tooltip-container">

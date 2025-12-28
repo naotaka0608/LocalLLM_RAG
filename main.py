@@ -36,6 +36,7 @@ class QueryRequest(BaseModel):
     model: Optional[str] = None
     use_rag: bool = True  # RAG使用のON/OFF
     query_expansion: bool = False
+    use_hybrid_search: bool = True  # ハイブリッド検索のON/OFF
     chat_history: Optional[List[Message]] = None  # 会話履歴
     # 主要パラメータ (★)
     temperature: Optional[float] = None
@@ -163,6 +164,7 @@ async def query_stream(request: QueryRequest):
                 model_name=request.model,
                 use_rag=request.use_rag,
                 enable_query_expansion=request.query_expansion,
+                use_hybrid_search=request.use_hybrid_search,
                 chat_history=chat_history,
                 temperature=request.temperature,
                 k=request.document_count,

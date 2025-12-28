@@ -13,6 +13,7 @@ let performanceSettings = {
     temperature: 0.3,
     documentCount: 10,  // 検索精度向上のため10件に増加
     searchMultiplier: 10,  // 検索範囲倍率（documentCount × searchMultiplier = 実際の検索件数）
+    useHybridSearch: true,  // ハイブリッド検索（BM25 + ベクトル）
     topP: 0.9,
     repeatPenalty: 1.1,
     numPredict: null,  // -1 = 無制限
@@ -672,6 +673,7 @@ async function sendQuestion() {
             question,
             use_rag: useRag,
             query_expansion: queryExpansion,
+            use_hybrid_search: performanceSettings.useHybridSearch,
             chat_history: chatHistoryMessages, // 会話履歴を追加
             // 主要パラメータ
             temperature: performanceSettings.temperature,
@@ -1102,6 +1104,13 @@ function updateDocs(value) {
 function updateSearchMultiplier(value) {
     performanceSettings.searchMultiplier = parseInt(value);
     document.getElementById('searchMultiplierValue').textContent = value + '倍';
+    document.getElementById('performancePreset').value = 'custom';
+    localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
+}
+
+// ハイブリッド検索ON/OFF更新
+function updateHybridSearch(checked) {
+    performanceSettings.useHybridSearch = checked;
     document.getElementById('performancePreset').value = 'custom';
     localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
 }
