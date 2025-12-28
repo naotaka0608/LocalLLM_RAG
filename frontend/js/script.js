@@ -11,7 +11,8 @@ let currentChatId = null;
 let performanceSettings = {
     // 主要パラメータ
     temperature: 0.3,
-    documentCount: 5,
+    documentCount: 10,  // 検索精度向上のため10件に増加
+    searchMultiplier: 10,  // 検索範囲倍率（documentCount × searchMultiplier = 実際の検索件数）
     topP: 0.9,
     repeatPenalty: 1.1,
     numPredict: null,  // -1 = 無制限
@@ -406,16 +407,49 @@ async function loadDocuments() {
         const response = await fetch(`${API_BASE_URL}/documents`);
         const data = await response.json();
         const listElement = document.getElementById('documentList');
+        const countElement = document.getElementById('documentCount');
+
+        // 件数を更新
+        countElement.textContent = `(${data.documents.length}件)`;
 
         if (data.documents.length === 0) {
             listElement.innerHTML = '<li style="text-align: center; color: #999;">ドキュメントなし</li>';
         } else {
             listElement.innerHTML = data.documents
-                .map(doc => `<li class="document-item">${doc}</li>`)
+                .map(doc => `
+                    <li class="document-item" style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>${doc}</span>
+                        <button onclick="deleteDocument('${doc}')" style="padding: 4px 8px; background: #f44336; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8rem;">削除</button>
+                    </li>
+                `)
                 .join('');
         }
     } catch (error) {
         console.error('Error loading documents:', error);
+    }
+}
+
+// 特定のドキュメントを削除
+async function deleteDocument(filename) {
+    if (!confirm(`「${filename}」を削除しますか？`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/documents/${encodeURIComponent(filename)}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            alert(`${filename} を削除しました`);
+            loadDocuments(); // リストを再読み込み
+        } else {
+            const error = await response.json();
+            alert(`削除に失敗しました: ${error.detail}`);
+        }
+    } catch (error) {
+        console.error('Error deleting document:', error);
+        alert('削除中にエラーが発生しました');
     }
 }
 
@@ -642,6 +676,7 @@ async function sendQuestion() {
             // 主要パラメータ
             temperature: performanceSettings.temperature,
             document_count: performanceSettings.documentCount,
+            search_multiplier: performanceSettings.searchMultiplier,
             top_p: performanceSettings.topP,
             repeat_penalty: performanceSettings.repeatPenalty,
             num_predict: performanceSettings.numPredict,
@@ -1059,6 +1094,14 @@ function updateTemperature(value) {
 function updateDocs(value) {
     performanceSettings.documentCount = parseInt(value);
     document.getElementById('docsValue').textContent = value;
+    document.getElementById('performancePreset').value = 'custom';
+    localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
+}
+
+// 検索範囲倍率更新
+function updateSearchMultiplier(value) {
+    performanceSettings.searchMultiplier = parseInt(value);
+    document.getElementById('searchMultiplierValue').textContent = value + '倍';
     document.getElementById('performancePreset').value = 'custom';
     localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
 }

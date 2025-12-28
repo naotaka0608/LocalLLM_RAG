@@ -128,11 +128,20 @@
 
                     <div style="margin-bottom: 15px;">
                         <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
-                            ★ 検索ドキュメント数: <span id="docsValue">5</span>
+                            ★ 検索ドキュメント数: <span id="docsValue">10</span>
                         </label>
-                        <input type="range" id="docsSlider" min="3" max="10" step="1" value="5"
+                        <input type="range" id="docsSlider" min="3" max="20" step="1" value="10"
                                oninput="updateDocs(this.value)" style="width: 100%;">
                         <div style="font-size: 0.75rem; color: #999;">少ない: 高速↑ 多い: 精度↑</div>
+                    </div>
+
+                    <div style="margin-bottom: 15px;">
+                        <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
+                            ★ 検索範囲倍率: <span id="searchMultiplierValue">10倍</span>
+                        </label>
+                        <input type="range" id="searchMultiplierSlider" min="2" max="20" step="1" value="10"
+                               oninput="updateSearchMultiplier(this.value)" style="width: 100%;">
+                        <div style="font-size: 0.75rem; color: #999;">検索時に取得する候補数（ドキュメント数×この倍率）。大きいほど精度↑</div>
                     </div>
 
                     <div style="margin-bottom: 15px;">
@@ -249,7 +258,7 @@
                 </div>
 
                 <div class="card">
-                    <h2>📚 登録済みドキュメント</h2>
+                    <h2>📚 登録済みドキュメント <span id="documentCount" style="font-size: 0.85rem; color: #666; font-weight: normal;">(0件)</span></h2>
                     <ul class="document-list" id="documentList">
                         <li style="text-align: center; color: #999;">ドキュメントなし</li>
                     </ul>

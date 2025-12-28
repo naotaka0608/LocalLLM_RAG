@@ -194,7 +194,7 @@ class RAGService:
 
         return Ollama(**params)
 
-    def query(self, question: str, k: int = 5, model_name: str = None, use_rag: bool = True, enable_query_expansion: bool = False,
+    def query(self, question: str, k: int = 5, search_multiplier: int = 10, model_name: str = None, use_rag: bool = True, enable_query_expansion: bool = False,
               chat_history: list = None, temperature: float = None, top_p: float = None, repeat_penalty: float = None,
               num_predict: int = None, top_k: int = None, num_ctx: int = None, seed: int = None,
               mirostat: int = None, mirostat_tau: float = None, mirostat_eta: float = None, tfs_z: float = None) -> Tuple[str, List[str], List[dict]]:
@@ -219,12 +219,25 @@ class RAGService:
         print(f"[DEBUG] Use RAG: {use_rag}")
         print(f"[DEBUG] Query expansion: {enable_query_expansion}")
 
+        # ベクトルストアの内容を確認
+        try:
+            all_docs = self.vectorstore.get()
+            if all_docs and "metadatas" in all_docs:
+                unique_sources = set()
+                for metadata in all_docs["metadatas"]:
+                    if metadata and "source_file" in metadata:
+                        unique_sources.add(metadata["source_file"])
+                print(f"[DEBUG] Documents in vectorstore: {sorted(unique_sources)}")
+                print(f"[DEBUG] Total chunks: {len(all_docs['metadatas'])}")
+        except Exception as e:
+            print(f"[DEBUG] Error checking vectorstore: {e}")
+
         # クエリ拡張
         queries = self._expand_query(question) if enable_query_expansion else [question]
 
         # 各クエリで検索を実行し、スコア付きでドキュメントを取得
         # より多くのドキュメントを取得してフィルタリング
-        initial_k = k * 2  # 最終的に必要な数の2倍を取得（高速化のため3倍→2倍に削減）
+        initial_k = k * search_multiplier  # 検索範囲倍率を適用
         all_docs_with_scores = []
         seen_content = set()  # 重複排除用
 
@@ -266,6 +279,22 @@ class RAGService:
 
         # スコアでソート(ChromaDBの場合、スコアが小さいほど類似度が高い)して上位k件を選択
         all_docs_with_scores.sort(key=lambda x: x[1])
+
+        # デバッグ: 検索結果の上位20件を表示
+        print(f"[DEBUG] Top 20 search results:")
+        for i, (doc, score) in enumerate(all_docs_with_scores[:20]):
+            source = doc.metadata.get("source_file", "Unknown")
+            print(f"  {i+1}. {source}: {score:.2f}")
+
+        # test_006がどこにあるか確認
+        for i, (doc, score) in enumerate(all_docs_with_scores):
+            source = doc.metadata.get("source_file", "Unknown")
+            if "test_006" in source:
+                print(f"[DEBUG] >>> test_006_emc_test.txt found at position {i+1} with score {score:.2f}")
+                break
+        else:
+            print(f"[DEBUG] >>> test_006_emc_test.txt NOT FOUND in search results!")
+
         top_docs_with_scores = all_docs_with_scores[:k]
         top_docs = [doc for doc, _score in top_docs_with_scores]
 
@@ -376,7 +405,7 @@ class RAGService:
                         except json.JSONDecodeError:
                             continue
 
-    async def query_stream(self, question: str, k: int = 5, model_name: str = None, use_rag: bool = True, enable_query_expansion: bool = False,
+    async def query_stream(self, question: str, k: int = 5, search_multiplier: int = 10, model_name: str = None, use_rag: bool = True, enable_query_expansion: bool = False,
                           chat_history: list = None, temperature: float = None, top_p: float = None, repeat_penalty: float = None,
                           num_predict: int = None, top_k: int = None, num_ctx: int = None, seed: int = None,
                           mirostat: int = None, mirostat_tau: float = None, mirostat_eta: float = None, tfs_z: float = None):
@@ -399,6 +428,26 @@ class RAGService:
         print(f"[DEBUG] Stream query received: {question}")
         print(f"[DEBUG] Use RAG: {use_rag}")
         print(f"[DEBUG] Query expansion: {enable_query_expansion}")
+
+        # ベクトルストアの内容を確認
+        try:
+            all_docs = self.vectorstore.get()
+            if all_docs and "metadatas" in all_docs:
+                unique_sources = set()
+                for metadata in all_docs["metadatas"]:
+                    if metadata and "source_file" in metadata:
+                        unique_sources.add(metadata["source_file"])
+                print(f"[DEBUG] Documents in vectorstore: {sorted(unique_sources)}")
+                print(f"[DEBUG] Total chunks: {len(all_docs['metadatas'])}")
+
+                # test_006のチャンク内容を確認
+                for i, metadata in enumerate(all_docs["metadatas"]):
+                    if metadata and metadata.get("source_file") == "test_006_emc_test.txt":
+                        content = all_docs["documents"][i][:100]  # 最初の100文字
+                        print(f"[DEBUG] test_006 chunk found: '{content}...'")
+                        break
+        except Exception as e:
+            print(f"[DEBUG] Error checking vectorstore: {e}")
 
         # パラメータをまとめる
         llm_params = {
@@ -431,7 +480,7 @@ class RAGService:
 
         for query in queries:
             try:
-                docs_with_scores = self.vectorstore.similarity_search_with_score(query, k=k * 2)
+                docs_with_scores = self.vectorstore.similarity_search_with_score(query, k=k * search_multiplier)
                 for doc, score in docs_with_scores:
                     content_hash = hash(doc.page_content[:200])
                     if content_hash not in seen_content:
@@ -453,6 +502,22 @@ class RAGService:
 
         # スコアでソートして上位を選択
         all_docs_with_scores.sort(key=lambda x: x[1])
+
+        # デバッグ: 検索結果の上位20件を表示
+        print(f"[DEBUG] Top 20 search results:")
+        for i, (doc, score) in enumerate(all_docs_with_scores[:20]):
+            source = doc.metadata.get("source_file", "Unknown")
+            print(f"  {i+1}. {source}: {score:.2f}")
+
+        # test_006がどこにあるか確認
+        for i, (doc, score) in enumerate(all_docs_with_scores):
+            source = doc.metadata.get("source_file", "Unknown")
+            if "test_006" in source:
+                print(f"[DEBUG] >>> test_006_emc_test.txt found at position {i+1} with score {score:.2f}")
+                break
+        else:
+            print(f"[DEBUG] >>> test_006_emc_test.txt NOT FOUND in search results!")
+
         top_docs_with_scores = all_docs_with_scores[:k]
 
         # コンテキストの構築
@@ -546,6 +611,40 @@ class RAGService:
         except Exception as e:
             print(f"[DEBUG] Error in list_documents: {e}")
             return []
+
+    def delete_document(self, filename: str) -> bool:
+        """
+        特定のファイルをベクトルストアから削除
+
+        Args:
+            filename: 削除するファイル名（例: test_006_emc_test.txt）
+
+        Returns:
+            削除成功したかどうか
+        """
+        try:
+            print(f"[DEBUG] Deleting document: {filename}")
+            collection = self.vectorstore._collection
+
+            # ファイル名に一致するIDを取得
+            all_data = collection.get()
+            ids_to_delete = []
+
+            for i, metadata in enumerate(all_data['metadatas']):
+                if metadata and metadata.get('source_file') == filename:
+                    ids_to_delete.append(all_data['ids'][i])
+
+            if ids_to_delete:
+                collection.delete(ids=ids_to_delete)
+                print(f"[DEBUG] Deleted {len(ids_to_delete)} chunks from {filename}")
+                return True
+            else:
+                print(f"[DEBUG] No chunks found for {filename}")
+                return False
+
+        except Exception as e:
+            print(f"[DEBUG] Error deleting document: {e}")
+            return False
 
     def clear_documents(self) -> None:
         """

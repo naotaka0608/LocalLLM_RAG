@@ -40,6 +40,7 @@ class QueryRequest(BaseModel):
     # 主要パラメータ (★)
     temperature: Optional[float] = None
     document_count: Optional[int] = None
+    search_multiplier: Optional[int] = None  # 検索範囲倍率
     top_p: Optional[float] = None
     repeat_penalty: Optional[float] = None
     num_predict: Optional[int] = None
@@ -165,6 +166,7 @@ async def query_stream(request: QueryRequest):
                 chat_history=chat_history,
                 temperature=request.temperature,
                 k=request.document_count,
+                search_multiplier=request.search_multiplier,
                 top_p=request.top_p,
                 repeat_penalty=request.repeat_penalty,
                 num_predict=request.num_predict,
@@ -192,6 +194,23 @@ async def list_documents():
     try:
         docs = rag_service.list_documents()
         return {"documents": docs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/documents/{filename}")
+async def delete_document(filename: str):
+    """
+    特定のドキュメントを削除
+    """
+    try:
+        success = rag_service.delete_document(filename)
+        if success:
+            return {"message": f"{filename} deleted successfully"}
+        else:
+            raise HTTPException(status_code=404, detail=f"{filename} not found")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
