@@ -685,7 +685,8 @@ async function sendQuestion() {
         let isFirstChunk = true;
 
         // 速度計測用の変数
-        let startTime = null;
+        const requestStartTime = Date.now(); // 質問送信時刻
+        let firstChunkTime = null; // 最初の文字受信時刻
         let charCount = 0;  // 文字数カウント（トークン数の近似値として使用）
         let speedDisplay = null;
 
@@ -727,17 +728,20 @@ async function sendQuestion() {
                         console.log('[DEBUG] First chunk received, clearing loading display');
                         contentDiv.innerHTML = '';
 
+                        // 最初の文字を受信した時刻を記録
+                        firstChunkTime = Date.now();
+                        const responseTime = ((firstChunkTime - requestStartTime) / 1000).toFixed(1);
+
                         // 速度表示エリアを追加
                         speedDisplay = document.createElement('div');
                         speedDisplay.style.cssText = 'font-size: 0.75rem; color: #999; margin-bottom: 8px; padding: 4px 8px; background: #f0f0f0; border-radius: 4px; display: inline-block;';
-                        speedDisplay.textContent = '生成中...';
+                        speedDisplay.textContent = `応答時間: ${responseTime}秒 | 生成中...`;
                         contentDiv.appendChild(speedDisplay);
 
                         const textContent = document.createElement('div');
                         textContent.id = 'streamingText-' + messageId;  // ユニークなIDを使用
                         contentDiv.appendChild(textContent);
 
-                        startTime = Date.now();
                         isFirstChunk = false;
                         console.log('[DEBUG] First chunk processed, streaming UI ready');
                     }
@@ -759,12 +763,11 @@ async function sendQuestion() {
                     }
 
                     // 速度を更新（リアルタイム）
-                    if (startTime && speedDisplay && charCount > 0) {
-                        const elapsed = (Date.now() - startTime) / 1000;
-                        if (elapsed > 0) {
-                            const speed = (charCount / elapsed).toFixed(1);
-                            speedDisplay.textContent = `⚡ ${speed} 文字/秒`;
-                        }
+                    if (firstChunkTime && speedDisplay && charCount > 0) {
+                        const responseTime = ((firstChunkTime - requestStartTime) / 1000).toFixed(1);
+                        const generationTime = ((Date.now() - firstChunkTime) / 1000).toFixed(1);
+                        const speed = (charCount / parseFloat(generationTime)).toFixed(1);
+                        speedDisplay.textContent = `応答時間: ${responseTime}秒 | 生成中: ${generationTime}秒 (${speed} 文字/秒)`;
                     }
 
                     messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -779,10 +782,11 @@ async function sendQuestion() {
         }
 
         // 最終速度を表示
-        if (startTime && speedDisplay && charCount > 0) {
-            const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
-            const avgSpeed = (charCount / totalTime).toFixed(1);
-            speedDisplay.textContent = `✓ 完了: ${avgSpeed} 文字/秒 (${totalTime}秒, ${charCount}文字)`;
+        if (firstChunkTime && speedDisplay && charCount > 0) {
+            const responseTime = ((firstChunkTime - requestStartTime) / 1000).toFixed(1);
+            const generationTime = ((Date.now() - firstChunkTime) / 1000).toFixed(1);
+            const avgSpeed = (charCount / parseFloat(generationTime)).toFixed(1);
+            speedDisplay.textContent = `✓ 完了: 応答時間: ${responseTime}秒 | 生成時間: ${generationTime}秒 | 速度: ${avgSpeed} 文字/秒`;
             speedDisplay.style.background = '#e8f5e9';
             speedDisplay.style.color = '#2e7d32';
         }
