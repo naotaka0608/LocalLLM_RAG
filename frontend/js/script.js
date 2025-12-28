@@ -7,6 +7,10 @@ const API_BASE_URL = window.location.origin;
 let chatHistory = [];
 let currentChatId = null;
 
+// ストリーミング中断用
+let currentAbortController = null;
+let isGenerating = false;
+
 // 性能設定
 let performanceSettings = {
     // 主要パラメータ
@@ -629,9 +633,15 @@ async function sendQuestion() {
     console.log('[DEBUG] Added user message to DOM (not saved to history yet)');
     input.value = '';
 
-    // 入力フィールドを無効化
+    // 入力フィールドを無効化、ボタン切り替え
     input.disabled = true;
     input.placeholder = '回答を生成中...';
+    document.getElementById('sendButton').style.display = 'none';
+    document.getElementById('stopButton').style.display = 'inline-block';
+    isGenerating = true;
+
+    // AbortControllerを作成
+    currentAbortController = new AbortController();
 
     // ストリーミング用のメッセージを追加（ローディング表示付き）
     const messageId = 'streaming-' + Date.now();
@@ -702,7 +712,8 @@ async function sendQuestion() {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify(requestBody),
+            signal: currentAbortController.signal
         });
 
         if (!response.ok) {
@@ -882,18 +893,65 @@ async function sendQuestion() {
 
     } catch (error) {
         console.error('Error:', error);
-        const errorMessageDiv = document.getElementById(messageId);
-        if (errorMessageDiv) {
-            const contentDiv = errorMessageDiv.querySelector('.streaming-content');
-            if (contentDiv) {
-                contentDiv.textContent = `エラー: ${error.message}`;
+
+        // AbortErrorの場合は停止メッセージを表示（途中まで生成されたテキストは保持）
+        if (error.name === 'AbortError') {
+            const errorMessageDiv = document.getElementById(messageId);
+            if (errorMessageDiv) {
+                // 点滅カーソルを削除
+                const cursor = errorMessageDiv.querySelector('.streaming-cursor');
+                if (cursor) {
+                    cursor.remove();
+                }
+
+                // テキストエリアを見つけてHTMLを更新（カーソルなしのテキストのみ）
+                const textElement = errorMessageDiv.querySelector('[id^="streamingText-"]');
+                if (textElement) {
+                    textElement.innerHTML = escapeHtml(fullAnswer);
+                }
+
+                // 速度表示を停止メッセージに変更
+                const speedDisplay = errorMessageDiv.querySelector('.speed-display');
+                if (speedDisplay) {
+                    speedDisplay.innerHTML = '<span style="font-weight: bold;">⏹ 生成を停止しました</span>';
+                    speedDisplay.style.background = '#fff3e0';
+                    speedDisplay.style.color = '#ff9800';
+                }
+            }
+
+            // 途中まで生成されたテキストを履歴に保存
+            if (fullAnswer) {
+                saveMessageToHistory('あなた', question, 'user');
+                saveMessageToHistory('アシスタント', fullAnswer + '\n[生成を停止]', 'assistant', sourcesData, sourceScores);
+            }
+        } else {
+            const errorMessageDiv = document.getElementById(messageId);
+            if (errorMessageDiv) {
+                const contentDiv = errorMessageDiv.querySelector('.streaming-content');
+                if (contentDiv) {
+                    contentDiv.textContent = `エラー: ${error.message}`;
+                }
             }
         }
     } finally {
+        // ボタン状態を元に戻す
+        document.getElementById('sendButton').style.display = 'inline-block';
+        document.getElementById('stopButton').style.display = 'none';
+        isGenerating = false;
+        currentAbortController = null;
+
         // 入力フィールドを再び有効化
         input.disabled = false;
         input.placeholder = '質問を入力してください...';
         input.focus();
+    }
+}
+
+// 生成停止
+function stopGeneration() {
+    if (currentAbortController && isGenerating) {
+        currentAbortController.abort();
+        console.log('[DEBUG] Generation stopped by user');
     }
 }
 
