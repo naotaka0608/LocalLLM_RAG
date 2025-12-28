@@ -120,6 +120,17 @@
                     <div style="margin-bottom: 15px;">
                         <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
                             ★ Temperature (創造性): <span id="tempValue">0.3</span>
+                            <div class="tooltip-container">
+                                <span class="tooltip-icon">?</span>
+                                <div class="tooltip-text">
+                                    <strong>Temperature（創造性）</strong><br>
+                                    範囲: 0.0 〜 1.0<br><br>
+                                    <strong>低い (0.0〜0.3)</strong>: 一貫性が高く予測可能。事実ベースのQ&Aに最適<br><br>
+                                    <strong>中程度 (0.4〜0.7)</strong>: バランス型<br><br>
+                                    <strong>高い (0.8〜1.0)</strong>: 創造的で多様。ブレインストーミングに有効<br><br>
+                                    推奨: RAG用途 0.2〜0.4
+                                </div>
+                            </div>
                         </label>
                         <input type="range" id="temperatureSlider" min="0" max="1" step="0.1" value="0.3"
                                oninput="updateTemperature(this.value)" style="width: 100%;">
@@ -129,6 +140,19 @@
                     <div style="margin-bottom: 15px;">
                         <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
                             ★ 検索ドキュメント数: <span id="docsValue">10</span>
+                            <div class="tooltip-container">
+                                <span class="tooltip-icon">?</span>
+                                <div class="tooltip-text">
+                                    <strong>検索ドキュメント数</strong>
+                                    範囲: 3 〜 20<br>
+                                    回答生成に使用するドキュメントの数
+                                    <ul>
+                                        <li><strong>少ない (3〜5)</strong>: 高速、シンプルなコンテキスト</li>
+                                        <li><strong>多い (10〜20)</strong>: 正確で詳細な回答、多角的な視点</li>
+                                    </ul>
+                                    推奨: 標準 10、複雑な質問 15〜20
+                                </div>
+                            </div>
                         </label>
                         <input type="range" id="docsSlider" min="3" max="20" step="1" value="10"
                                oninput="updateDocs(this.value)" style="width: 100%;">
@@ -138,6 +162,20 @@
                     <div style="margin-bottom: 15px;">
                         <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
                             ★ 検索範囲倍率: <span id="searchMultiplierValue">10倍</span>
+                            <div class="tooltip-container">
+                                <span class="tooltip-icon">?</span>
+                                <div class="tooltip-text">
+                                    <strong>検索範囲倍率</strong>
+                                    範囲: 2 〜 20倍<br>
+                                    実際に検索する候補数 = ドキュメント数 × 倍率
+                                    <ul>
+                                        <li>例: ドキュメント数10、倍率10 → <strong>100件検索</strong>して上位10件を使用</li>
+                                        <li><strong>低い倍率 (2〜5)</strong>: 高速</li>
+                                        <li><strong>高い倍率 (10〜20)</strong>: より関連性の高い文書を選択、日本語検索精度向上</li>
+                                    </ul>
+                                    推奨: 標準 10、精度優先 15〜20
+                                </div>
+                            </div>
                         </label>
                         <input type="range" id="searchMultiplierSlider" min="2" max="20" step="1" value="10"
                                oninput="updateSearchMultiplier(this.value)" style="width: 100%;">
@@ -147,6 +185,19 @@
                     <div style="margin-bottom: 15px;">
                         <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
                             ★ Top-P (多様性): <span id="topPValue">0.9</span>
+                            <div class="tooltip-container">
+                                <span class="tooltip-icon">?</span>
+                                <div class="tooltip-text">
+                                    <strong>Top-P（多様性）</strong>
+                                    範囲: 0.1 〜 1.0<br>
+                                    Nucleus sampling。累積確率がこの値に達するまでのトークンから選択
+                                    <ul>
+                                        <li><strong>低い (0.1〜0.5)</strong>: 確実性の高い単語のみ、一貫性重視</li>
+                                        <li><strong>高い (0.8〜1.0)</strong>: 多様な単語候補を考慮、表現の幅が広がる</li>
+                                    </ul>
+                                    推奨: 事実ベース 0.7〜0.8、標準 0.9
+                                </div>
+                            </div>
                         </label>
                         <input type="range" id="topPSlider" min="0.1" max="1.0" step="0.05" value="0.9"
                                oninput="updateTopP(this.value)" style="width: 100%;">
@@ -156,6 +207,20 @@
                     <div style="margin-bottom: 15px;">
                         <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
                             ★ Repeat Penalty (繰り返し抑制): <span id="repeatPenaltyValue">1.1</span>
+                            <div class="tooltip-container">
+                                <span class="tooltip-icon">?</span>
+                                <div class="tooltip-text">
+                                    <strong>Repeat Penalty（繰り返し抑制）</strong>
+                                    範囲: 1.0 〜 1.5<br>
+                                    同じ単語やフレーズの繰り返しを抑制
+                                    <ul>
+                                        <li><strong>1.0</strong>: ペナルティなし（繰り返しを許容）</li>
+                                        <li><strong>1.1〜1.2</strong>: 適度に抑制（推奨）</li>
+                                        <li><strong>1.3以上</strong>: 強い抑制（不自然になる可能性）</li>
+                                    </ul>
+                                    推奨: 標準 1.1
+                                </div>
+                            </div>
                         </label>
                         <input type="range" id="repeatPenaltySlider" min="1.0" max="1.5" step="0.05" value="1.1"
                                oninput="updateRepeatPenalty(this.value)" style="width: 100%;">
@@ -165,6 +230,21 @@
                     <div style="margin-bottom: 15px;">
                         <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
                             ★ Num Predict (最大生成トークン数): <span id="numPredictValue">-1 (無制限)</span>
+                            <div class="tooltip-container">
+                                <span class="tooltip-icon">?</span>
+                                <div class="tooltip-text">
+                                    <strong>Num Predict（最大生成トークン数）</strong>
+                                    範囲: -1（無制限）、128 〜 2048<br>
+                                    生成する最大トークン数
+                                    <ul>
+                                        <li><strong>-1（無制限）</strong>: モデルが自然に終了するまで生成</li>
+                                        <li><strong>128〜256</strong>: 短い回答（要約、簡潔な説明）</li>
+                                        <li><strong>512〜1024</strong>: 標準的な回答</li>
+                                        <li><strong>1024〜2048</strong>: 詳細な説明、長文生成</li>
+                                    </ul>
+                                    推奨: 詳細な回答なら -1
+                                </div>
+                            </div>
                         </label>
                         <input type="range" id="numPredictSlider" min="-1" max="2048" step="128" value="-1"
                                oninput="updateNumPredict(this.value)" style="width: 100%;">
@@ -179,6 +259,19 @@
                     <div style="margin-bottom: 15px;">
                         <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
                             Top-K: <span id="topKValue">デフォルト (40)</span>
+                            <div class="tooltip-container">
+                                <span class="tooltip-icon">?</span>
+                                <div class="tooltip-text">
+                                    <strong>Top-K</strong>
+                                    範囲: 1 〜 100<br>
+                                    各ステップで考慮する上位K個のトークン候補
+                                    <ul>
+                                        <li><strong>低い (10〜20)</strong>: より予測可能な出力</li>
+                                        <li><strong>高い (60〜100)</strong>: より多様な出力</li>
+                                    </ul>
+                                    通常はTop-Pで制御するため、デフォルトのままでOK
+                                </div>
+                            </div>
                         </label>
                         <input type="range" id="topKSlider" min="1" max="100" step="1" value="40"
                                oninput="updateTopK(this.value)" style="width: 100%;">
@@ -188,6 +281,20 @@
                     <div style="margin-bottom: 15px;">
                         <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
                             Num Ctx (コンテキストサイズ): <span id="numCtxValue">デフォルト (2048)</span>
+                            <div class="tooltip-container">
+                                <span class="tooltip-icon">?</span>
+                                <div class="tooltip-text">
+                                    <strong>Num Ctx（コンテキストサイズ）</strong>
+                                    範囲: 512 〜 8192<br>
+                                    モデルが一度に考慮できるトークン数（入力+出力）
+                                    <ul>
+                                        <li><strong>512〜1024</strong>: 短い会話に十分</li>
+                                        <li><strong>2048</strong>: 標準的な会話と文書</li>
+                                        <li><strong>4096〜8192</strong>: 長文の文書、長い会話履歴</li>
+                                    </ul>
+                                    注意: 大きくするほどメモリ使用量とレイテンシが増加
+                                </div>
+                            </div>
                         </label>
                         <input type="range" id="numCtxSlider" min="512" max="8192" step="512" value="2048"
                                oninput="updateNumCtx(this.value)" style="width: 100%;">
@@ -197,6 +304,18 @@
                     <div style="margin-bottom: 15px;">
                         <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
                             Seed (乱数シード): <span id="seedValue">ランダム</span>
+                            <div class="tooltip-container">
+                                <span class="tooltip-icon">?</span>
+                                <div class="tooltip-text">
+                                    <strong>Seed（乱数シード）</strong>
+                                    範囲: 任意の整数、または空欄（ランダム）<br>
+                                    同じシードで同じ結果を再現可能にする
+                                    <ul>
+                                        <li><strong>用途</strong>: デバッグ、A/Bテスト、結果の再現性確保</li>
+                                    </ul>
+                                    通常は空欄（ランダム）でOK
+                                </div>
+                            </div>
                         </label>
                         <input type="number" id="seedInput" placeholder="空欄=ランダム" min="0"
                                oninput="updateSeed(this.value)" style="width: 100%; padding: 8px; border-radius: 5px; border: 2px solid #e0e0e0;">
@@ -206,6 +325,18 @@
                     <div style="margin-bottom: 15px;">
                         <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
                             Mirostat: <span id="mirostatValue">無効 (0)</span>
+                            <div class="tooltip-container">
+                                <span class="tooltip-icon">?</span>
+                                <div class="tooltip-text">
+                                    <strong>Mirostat</strong>
+                                    動的サンプリングアルゴリズム。perplexityを制御して一貫した品質を維持
+                                    <ul>
+                                        <li><strong>無効 (0)</strong>: 標準的なサンプリング（Temperature、Top-Pを使用）</li>
+                                        <li><strong>Mirostat 1.0 / 2.0</strong>: より一貫した品質の出力</li>
+                                    </ul>
+                                    推奨: 通常は無効でOK。品質が不安定な場合に試す
+                                </div>
+                            </div>
                         </label>
                         <select id="mirostatSelect" onchange="updateMirostat(this.value)" style="width: 100%; padding: 8px; border-radius: 5px; border: 2px solid #e0e0e0;">
                             <option value="0">無効 (0)</option>
@@ -218,6 +349,20 @@
                     <div style="margin-bottom: 15px;">
                         <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
                             Mirostat Tau: <span id="mirostatTauValue">デフォルト (5.0)</span>
+                            <div class="tooltip-container">
+                                <span class="tooltip-icon">?</span>
+                                <div class="tooltip-text">
+                                    <strong>Mirostat Tau</strong>
+                                    範囲: 通常 3.0 〜 10.0<br>
+                                    デフォルト: 5.0<br>
+                                    Mirostatの目標perplexity（エントロピー）
+                                    <ul>
+                                        <li><strong>低い値 (3.0〜4.0)</strong>: より予測可能な出力</li>
+                                        <li><strong>高い値 (7.0〜10.0)</strong>: より多様な出力</li>
+                                    </ul>
+                                    ※ Mirostat有効時のみ機能
+                                </div>
+                            </div>
                         </label>
                         <input type="range" id="mirostatTauSlider" min="0.1" max="10.0" step="0.1" value="5.0"
                                oninput="updateMirostatTau(this.value)" style="width: 100%;">
@@ -227,6 +372,20 @@
                     <div style="margin-bottom: 15px;">
                         <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
                             Mirostat Eta: <span id="mirostatEtaValue">デフォルト (0.1)</span>
+                            <div class="tooltip-container">
+                                <span class="tooltip-icon">?</span>
+                                <div class="tooltip-text">
+                                    <strong>Mirostat Eta</strong>
+                                    範囲: 通常 0.05 〜 0.2<br>
+                                    デフォルト: 0.1<br>
+                                    Mirostatの学習率（適応速度）
+                                    <ul>
+                                        <li><strong>低い値 (0.05)</strong>: 緩やかな調整、安定</li>
+                                        <li><strong>高い値 (0.2)</strong>: 速い調整、応答的</li>
+                                    </ul>
+                                    ※ Mirostat有効時のみ機能
+                                </div>
+                            </div>
                         </label>
                         <input type="range" id="mirostatEtaSlider" min="0.01" max="1.0" step="0.01" value="0.1"
                                oninput="updateMirostatEta(this.value)" style="width: 100%;">
@@ -236,6 +395,21 @@
                     <div style="margin-bottom: 15px;">
                         <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 5px;">
                             TFS-Z: <span id="tfsZValue">デフォルト (1.0)</span>
+                            <div class="tooltip-container">
+                                <span class="tooltip-icon">?</span>
+                                <div class="tooltip-text">
+                                    <strong>TFS-Z (Tail Free Sampling)</strong>
+                                    範囲: 0.5 〜 1.0<br>
+                                    デフォルト: 1.0（無効）<br>
+                                    低確率のトークン（テール部分）を除外
+                                    <ul>
+                                        <li><strong>1.0</strong>: 無効（除外なし）</li>
+                                        <li><strong>0.9〜0.95</strong>: 軽度の除外、品質向上</li>
+                                        <li><strong>0.5〜0.8</strong>: 強い除外、一貫性重視</li>
+                                    </ul>
+                                    推奨: 通常は1.0（無効）。品質向上したい場合は0.95から試す
+                                </div>
+                            </div>
                         </label>
                         <input type="range" id="tfsZSlider" min="1.0" max="2.0" step="0.05" value="1.0"
                                oninput="updateTfsZ(this.value)" style="width: 100%;">
