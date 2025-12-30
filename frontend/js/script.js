@@ -119,6 +119,37 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// 改行を含むテキストをHTMLに変換（回答表示用）
+function formatAnswerText(text) {
+    // HTMLエスケープ
+    let escaped = escapeHtml(text);
+
+    // 既存の改行を<br>に変換
+    escaped = escaped.replace(/\n/g, '<br>');
+
+    // 見出し風の処理: 「**」で囲まれた部分を太字にして前後に改行（先に処理）
+    escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<br><strong>$1</strong><br>');
+
+    // 箇条書きマーカーの変換（**を処理した後、残りの全ての*を●に変換）
+    escaped = escaped.replace(/\*/g, '●');
+
+    // 箇条書きの整形（自動改行より前に処理）
+    // パターン: ● の後に <br> が続き、その後にテキストが来る場合、<br> を削除して同じ行にする
+    // 例: ●<br>デザイン: → ● デザイン:
+    escaped = escaped.replace(/●\s*<br>\s*/g, '● ');
+
+    // 箇条書き項目の前に空行を入れる（見やすくするため）
+    escaped = escaped.replace(/([^>])(<br>)?● /g, '$1<br><br>● ');
+
+    // 連続する<br>を整理（3個以上→2個）
+    escaped = escaped.replace(/(<br>){3,}/g, '<br><br>');
+
+    // 自動改行: 句点の後に改行を挿入
+    escaped = escaped.replace(/([。])([^\s）」』\d●<])/g, '$1<br>$2');
+
+    return escaped;
+}
+
 // チャットタイトルを編集
 function editChatTitle(chatId) {
     const chat = chatHistory.find(c => c.id === chatId);
@@ -254,7 +285,7 @@ function loadChat(chatId) {
         let html = `
             <div class="message ${msg.type}">
                 <div class="message-header">${msg.sender}</div>
-                <div>${msg.text}</div>
+                <div>${formatAnswerText(msg.text)}</div>
         `;
 
         if (msg.sources && msg.sources.length > 0) {
@@ -822,8 +853,8 @@ async function sendQuestion() {
                     // 特定のメッセージのテキストエリアを取得
                     const textElement = specificMessageDiv.querySelector('[id^="streamingText-"]');
                     if (textElement) {
-                        // テキストを表示（カーソルアニメーション付き）
-                        textElement.innerHTML = escapeHtml(fullAnswer) + '<span class="streaming-cursor">▊</span>';
+                        // テキストを表示（カーソルアニメーション付き、改行対応）
+                        textElement.innerHTML = formatAnswerText(fullAnswer) + '<span class="streaming-cursor">▊</span>';
                         // 即座にスクロール
                         messagesDiv.scrollTop = messagesDiv.scrollHeight;
                     }
@@ -841,10 +872,10 @@ async function sendQuestion() {
             }
         }
 
-        // カーソルを削除して最終テキストを表示
+        // カーソルを削除して最終テキストを表示（改行対応）
         const textElement = specificMessageDiv.querySelector('[id^="streamingText-"]');
         if (textElement) {
-            textElement.innerHTML = escapeHtml(fullAnswer);
+            textElement.innerHTML = formatAnswerText(fullAnswer);
         }
 
         // 最終速度を表示
@@ -943,10 +974,10 @@ async function sendQuestion() {
                     cursor.remove();
                 }
 
-                // テキストエリアを見つけてHTMLを更新（カーソルなしのテキストのみ）
+                // テキストエリアを見つけてHTMLを更新（カーソルなしのテキストのみ、改行対応）
                 const textElement = errorMessageDiv.querySelector('[id^="streamingText-"]');
                 if (textElement) {
-                    textElement.innerHTML = escapeHtml(fullAnswer);
+                    textElement.innerHTML = formatAnswerText(fullAnswer);
                 }
 
                 // 速度表示を停止メッセージに変更
