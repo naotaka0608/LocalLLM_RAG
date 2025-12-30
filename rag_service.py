@@ -485,15 +485,23 @@ class RAGService:
                 for msg in chat_history[-10:]  # 最新10件のみ使用
             ])
 
-            prompt_text = f"""以下は過去の会話履歴です：
+            prompt_text = f"""あなたは親切で知識豊富なアシスタントです。
 
+以下は過去の会話履歴です：
 {history_text}
 
-以下の情報を参考にして、質問に答えてください：
-
+参照ドキュメント:
 {context}
 
 質問: {question}
+
+指示:
+- 上記の参照ドキュメントに含まれる情報を最大限活用して、質問に対して詳しく丁寧に答えてください
+- 会話の文脈を考慮し、自然な対話を心がけてください
+- 直接的な答えが見つからない場合でも、関連する情報や類似の内容があれば、それを基に推論して回答してください
+- ドキュメントに複数の関連情報がある場合は、それらを統合して包括的な回答を提供してください
+- ドキュメント内の具体的な情報（数値、固有名詞、事実など）を積極的に引用してください
+- どうしても関連する情報が全く見つからない場合のみ、その旨を伝えてください
 
 回答:"""
         else:
@@ -737,15 +745,23 @@ class RAGService:
                 for msg in chat_history[-10:]  # 最新10件のみ使用
             ])
 
-            prompt_text = f"""以下は過去の会話履歴です：
+            prompt_text = f"""あなたは親切で知識豊富なアシスタントです。
 
+以下は過去の会話履歴です：
 {history_text}
 
-以下の情報を参考にして、質問に答えてください：
-
+参照ドキュメント:
 {context}
 
 質問: {question}
+
+指示:
+- 上記の参照ドキュメントに含まれる情報を最大限活用して、質問に対して詳しく丁寧に答えてください
+- 会話の文脈を考慮し、自然な対話を心がけてください
+- 直接的な答えが見つからない場合でも、関連する情報や類似の内容があれば、それを基に推論して回答してください
+- ドキュメントに複数の関連情報がある場合は、それらを統合して包括的な回答を提供してください
+- ドキュメント内の具体的な情報（数値、固有名詞、事実など）を積極的に引用してください
+- どうしても関連する情報が全く見つからない場合のみ、その旨を伝えてください
 
 回答:"""
         else:
@@ -859,6 +875,47 @@ class RAGService:
         except Exception as e:
             print(f"[DEBUG] Error deleting document: {e}")
             return False
+
+    def get_document_content(self, filename: str) -> str:
+        """
+        ドキュメントの内容を取得（プレビュー用）
+
+        Args:
+            filename: ファイル名
+
+        Returns:
+            ドキュメントの内容（テキスト）
+        """
+        try:
+            print(f"[DEBUG] Getting content for document: {filename}")
+            collection = self.vectorstore._collection
+            all_data = collection.get()
+
+            # 指定されたファイルのチャンクを全て取得
+            chunks = []
+            for i, metadata in enumerate(all_data['metadatas']):
+                if metadata and metadata.get('source_file') == filename:
+                    chunks.append({
+                        'text': all_data['documents'][i],
+                        'page': metadata.get('page', 0)
+                    })
+
+            if not chunks:
+                print(f"[DEBUG] No chunks found for {filename}")
+                return None
+
+            # ページ番号でソート（PDFの場合）
+            chunks.sort(key=lambda x: x.get('page', 0))
+
+            # 全チャンクを結合
+            content = '\n\n---\n\n'.join([chunk['text'] for chunk in chunks])
+            print(f"[DEBUG] Retrieved {len(chunks)} chunks for {filename}")
+
+            return content
+
+        except Exception as e:
+            print(f"[DEBUG] Error getting document content: {e}")
+            return None
 
     def clear_documents(self) -> None:
         """

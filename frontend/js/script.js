@@ -839,6 +839,21 @@ async function sendQuestion() {
             speedDisplay.style.color = '#2e7d32';
         }
 
+        // コピーボタンと再生成ボタンを追加
+        const actionButtons = document.createElement('div');
+        actionButtons.style.cssText = 'margin-top: 8px; display: flex; gap: 8px;';
+        actionButtons.innerHTML = `
+            <button onclick="copyAnswer('${messageId}')" style="padding: 6px 12px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; gap: 4px;">
+                📋 コピー
+            </button>
+            <button onclick="regenerateAnswer('${question.replace(/'/g, "\\'")}', '${messageId}')" style="padding: 6px 12px; background: #ff9800; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; gap: 4px;">
+                🔄 再生成
+            </button>
+        `;
+        specificMessageDiv.querySelector('.streaming-content') ?
+            specificMessageDiv.querySelector('.streaming-content').parentNode.insertBefore(actionButtons, specificMessageDiv.querySelector('.streaming-content').nextSibling) :
+            specificMessageDiv.appendChild(actionButtons);
+
         // 参照元を表示
         if (sourcesData && sourcesData.length > 0) {
             const sourcesDiv = document.createElement('div');
@@ -857,16 +872,22 @@ async function sendQuestion() {
             if (sourceScores && sourceScores.length > 0) {
                 sourceScores.forEach(item => {
                     const sourceItem = document.createElement('div');
-                    sourceItem.style.cssText = 'font-size: 0.8rem; color: #555; margin: 4px 0;';
-                    sourceItem.innerHTML = `• ${item.source}${createScoreBar(item.score)}`;
+                    sourceItem.style.cssText = 'font-size: 0.8rem; color: #555; margin: 4px 0; cursor: pointer; padding: 4px; border-radius: 4px; transition: background 0.2s;';
+                    sourceItem.innerHTML = `• <span style="color: #667eea; text-decoration: underline;">${item.source}</span>${createScoreBar(item.score)}`;
+                    sourceItem.onmouseover = () => sourceItem.style.background = '#f0f0ff';
+                    sourceItem.onmouseout = () => sourceItem.style.background = 'transparent';
+                    sourceItem.onclick = () => showDocumentPreview(item.source);
                     sourcesList.appendChild(sourceItem);
                 });
             } else {
                 // スコアなしの場合
                 sourcesData.forEach(source => {
                     const sourceItem = document.createElement('div');
-                    sourceItem.style.cssText = 'font-size: 0.8rem; color: #555; margin: 4px 0;';
-                    sourceItem.textContent = `• ${source}`;
+                    sourceItem.style.cssText = 'font-size: 0.8rem; color: #555; margin: 4px 0; cursor: pointer; padding: 4px; border-radius: 4px; transition: background 0.2s;';
+                    sourceItem.innerHTML = `• <span style="color: #667eea; text-decoration: underline;">${source}</span>`;
+                    sourceItem.onmouseover = () => sourceItem.style.background = '#f0f0ff';
+                    sourceItem.onmouseout = () => sourceItem.style.background = 'transparent';
+                    sourceItem.onclick = () => showDocumentPreview(source);
                     sourcesList.appendChild(sourceItem);
                 });
             }
@@ -953,6 +974,135 @@ function stopGeneration() {
         currentAbortController.abort();
         console.log('[DEBUG] Generation stopped by user');
     }
+}
+
+// 回答をコピー
+function copyAnswer(messageId) {
+    const messageDiv = document.getElementById(messageId);
+    if (!messageDiv) return;
+
+    // テキストエリアを探す
+    const textElement = messageDiv.querySelector('[id^="streamingText-"]');
+    let answerText = '';
+
+    if (textElement) {
+        answerText = textElement.textContent;
+    } else {
+        // streaming-contentがない場合は、メッセージ全体からテキストを取得
+        const contentDiv = messageDiv.querySelector('div[style*="white-space"]');
+        if (contentDiv) {
+            answerText = contentDiv.textContent;
+        }
+    }
+
+    if (answerText) {
+        navigator.clipboard.writeText(answerText).then(() => {
+            // コピー成功のフィードバック
+            const button = event.target.closest('button');
+            const originalText = button.innerHTML;
+            button.innerHTML = '✓ コピー完了';
+            button.style.background = '#4caf50';
+            setTimeout(() => {
+                button.innerHTML = originalText;
+                button.style.background = '#667eea';
+            }, 2000);
+        }).catch(err => {
+            console.error('コピー失敗:', err);
+            alert('コピーに失敗しました');
+        });
+    }
+}
+
+// 回答を再生成
+async function regenerateAnswer(question, oldMessageId) {
+    // 古い回答メッセージを削除
+    const oldMessage = document.getElementById(oldMessageId);
+    if (oldMessage) {
+        oldMessage.remove();
+    }
+
+    // 会話履歴から質問と回答のペアを削除
+    const currentChat = chatHistory.find(chat => chat.id === currentChatId);
+    if (currentChat && currentChat.messages.length >= 2) {
+        // 最後の2つのメッセージ（質問と回答）を削除
+        const lastMsg = currentChat.messages[currentChat.messages.length - 1];
+        const secondLastMsg = currentChat.messages[currentChat.messages.length - 2];
+
+        if (lastMsg.type === 'assistant' && secondLastMsg.type === 'user') {
+            currentChat.messages.pop(); // 回答を削除
+            currentChat.messages.pop(); // 質問を削除
+        }
+    }
+
+    // 質問メッセージも削除（DOMから）
+    const messagesDiv = document.getElementById('chatMessages');
+    const allMessages = messagesDiv.querySelectorAll('.message');
+    for (let i = allMessages.length - 1; i >= 0; i--) {
+        const msg = allMessages[i];
+        // 質問メッセージを見つけて削除
+        if (msg.querySelector('.message-header')?.textContent.includes('あなた')) {
+            const msgContent = msg.querySelector('div[style*="white-space"]')?.textContent;
+            if (msgContent && msgContent.trim() === question.trim()) {
+                msg.remove();
+                break;
+            }
+        }
+    }
+
+    // 質問を入力フィールドに設定して再送信
+    const input = document.getElementById('questionInput');
+    input.value = question;
+    await sendQuestion();
+}
+
+// ドキュメントプレビューを表示
+async function showDocumentPreview(sourceInfo) {
+    // ファイル名とページ番号を抽出
+    let filename = sourceInfo;
+    let pageNum = null;
+
+    // "filename (Page X)" 形式の場合、ファイル名とページ番号を分離
+    const pageMatch = sourceInfo.match(/^(.+?)\s*\(Page\s+(\d+)\)$/);
+    if (pageMatch) {
+        filename = pageMatch[1];
+        pageNum = parseInt(pageMatch[2]);
+    }
+
+    const modal = document.getElementById('documentPreviewModal');
+    const titleElement = document.getElementById('previewTitle');
+    const contentElement = document.getElementById('previewContent');
+
+    // モーダルを表示
+    modal.style.display = 'flex';
+    titleElement.textContent = sourceInfo;
+    contentElement.innerHTML = '<div style="text-align: center; padding: 20px;">読み込み中...</div>';
+
+    try {
+        // バックエンドからドキュメント内容を取得
+        const response = await fetch(`${API_BASE_URL}/document/content/${encodeURIComponent(filename)}`);
+
+        if (!response.ok) {
+            throw new Error('ドキュメントの取得に失敗しました');
+        }
+
+        const data = await response.json();
+
+        // コンテンツを表示
+        if (data.content) {
+            contentElement.textContent = data.content;
+        } else {
+            contentElement.textContent = 'ドキュメントの内容が見つかりませんでした';
+        }
+    } catch (error) {
+        console.error('Error loading document:', error);
+        contentElement.innerHTML = `<div style="color: #e74c3c;">エラー: ${error.message}</div>`;
+    }
+}
+
+// ドキュメントプレビューを閉じる
+function closeDocumentPreview() {
+    const modal = document.getElementById('documentPreviewModal');
+    modal.style.display = 'none';
 }
 
 // ローディングメッセージを追加

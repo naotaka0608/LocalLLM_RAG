@@ -217,6 +217,23 @@ async def delete_document(filename: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/document/content/{filename}")
+async def get_document_content(filename: str):
+    """
+    ドキュメントの内容を取得（プレビュー用）
+    """
+    try:
+        content = rag_service.get_document_content(filename)
+        if content:
+            return {"content": content, "filename": filename}
+        else:
+            raise HTTPException(status_code=404, detail=f"{filename} not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.delete("/documents")
 async def clear_documents():
     """
