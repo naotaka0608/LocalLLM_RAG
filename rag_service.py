@@ -18,13 +18,18 @@ import json
 from rank_bm25 import BM25Okapi
 import re
 
+from config import RAGConfig, PromptTemplates
+from logger import setup_logger
+
+logger = setup_logger(__name__)
+
 
 class RAGService:
     def __init__(
         self,
         model_name: str = None,
-        embedding_model: str = "nomic-embed-text",
-        persist_directory: str = "./chroma_db"
+        embedding_model: str = None,
+        persist_directory: str = None
     ):
         """
         RAGサービスの初期化
@@ -34,25 +39,27 @@ class RAGService:
             embedding_model: Ollamaで使用する埋め込みモデル名
             persist_directory: ChromaDBの永続化ディレクトリ
         """
+        # デフォルト値を設定から取得
+        self.embedding_model = embedding_model or RAGConfig.DEFAULT_EMBEDDING_MODEL
+        self.persist_directory = persist_directory or RAGConfig.CHROMA_PERSIST_DIRECTORY
+
         # model_nameがNoneの場合、利用可能なモデルの最初のものを使用
         if model_name is None:
             available_models = self._get_available_models_static()
             if available_models:
                 model_name = available_models[0]
-                print(f"[INFO] Using first available model: {model_name}")
+                logger.info("Using first available model: %s", model_name)
             else:
                 # フォールバック: モデルが見つからない場合
                 model_name = "gemma3:12b"
-                print(f"[WARNING] No models found, using fallback: {model_name}")
+                logger.warning("No models found, using fallback: %s", model_name)
 
         self.model_name = model_name
-        self.embedding_model = embedding_model
-        self.persist_directory = persist_directory
 
         # Embeddings
         self.embeddings = OllamaEmbeddings(
             model=self.embedding_model,
-            base_url="http://localhost:11434"
+            base_url=RAGConfig.OLLAMA_BASE_URL
         )
 
         # Vector Store
@@ -64,35 +71,19 @@ class RAGService:
         # LLM（temperature低めで高速化と一貫性向上）
         self.llm = Ollama(
             model=self.model_name,
-            base_url="http://localhost:11434",
-            temperature=0.3
+            base_url=RAGConfig.OLLAMA_BASE_URL,
+            temperature=RAGConfig.DEFAULT_TEMPERATURE
         )
 
         # Text Splitter（より大きなチャンクでコンテキストを保持）
         self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1500,
-            chunk_overlap=300,
+            chunk_size=RAGConfig.DEFAULT_CHUNK_SIZE,
+            chunk_overlap=RAGConfig.DEFAULT_CHUNK_OVERLAP,
             length_function=len
         )
 
-        # プロンプトテンプレート
-        self.prompt_template = """あなたは親切で知識豊富なアシスタントです。以下のドキュメントから抽出された情報を使って、ユーザーの質問に答えてください。
-
-参照ドキュメント:
-{context}
-
-質問: {question}
-
-指示:
-- 上記の参照ドキュメントに含まれる情報を最大限活用して、質問に対して詳しく丁寧に答えてください
-- 直接的な答えが見つからない場合でも、関連する情報や類似の内容があれば、それを基に推論して回答してください
-- ドキュメントに複数の関連情報がある場合は、それらを統合して包括的な回答を提供してください
-- ドキュメント内の具体的な情報（数値、固有名詞、事実など）を積極的に引用してください
-- どうしても関連する情報が全く見つからない場合のみ、その旨を伝えてください
-- 回答は読みやすいように、適切に段落分けや改行を入れてください
-- 複数の項目を説明する場合は、項目ごとに改行して見やすくしてください
-
-回答:"""
+        # プロンプトテンプレート（configから取得）
+        self.prompt_template = PromptTemplates.BASE_RAG_TEMPLATE
 
         self.prompt = PromptTemplate(
             template=self.prompt_template,
@@ -116,11 +107,7 @@ class RAGService:
         Returns:
             トークンのリスト
         """
-        # 1文字以上の連続する文字種でトークンを作成
-        tokens = []
-        # 日本語文字（ひらがな、カタカナ、漢字）+ 英数字 + 記号を考慮
-        pattern = r'[一-龥ぁ-んァ-ヴー]+|[a-zA-Z0-9]+|[0-9]+(?:\.[0-9]+)?'
-        tokens = re.findall(pattern, text.lower())
+        tokens = re.findall(RAGConfig.TOKENIZE_PATTERN, text.lower())
         return tokens
 
     def _rebuild_bm25_index(self):
@@ -132,7 +119,7 @@ class RAGService:
             all_data = collection.get()
 
             if not all_data['ids']:
-                print("[DEBUG] No documents in vectorstore, BM25 index is empty")
+                logger.debug("No documents in vectorstore, BM25 index is empty")
                 self.bm25_corpus = []
                 self.bm25_docs = []
                 self.bm25_index = None
@@ -159,13 +146,13 @@ class RAGService:
             # BM25インデックスを構築
             if self.bm25_corpus:
                 self.bm25_index = BM25Okapi(self.bm25_corpus)
-                print(f"[DEBUG] BM25 index built with {len(self.bm25_corpus)} documents")
+                logger.debug("BM25 index built with %d documents", len(self.bm25_corpus))
             else:
                 self.bm25_index = None
-                print("[DEBUG] BM25 corpus is empty")
+                logger.debug("BM25 corpus is empty")
 
         except Exception as e:
-            print(f"[DEBUG] Error building BM25 index: {e}")
+            logger.error("Error building BM25 index: %s", e, exc_info=True)
             self.bm25_corpus = []
             self.bm25_docs = []
             self.bm25_index = None
@@ -203,22 +190,22 @@ class RAGService:
             split.metadata["source_file"] = os.path.basename(file_path)
 
         # ベクトルストアに追加
-        print(f"[DEBUG] Adding {len(splits)} document chunks to vector store...")
+        logger.info("Adding %d document chunks to vector store", len(splits))
         self.vectorstore.add_documents(splits)
 
         # 永続化
         try:
             self.vectorstore.persist()
-            print(f"[DEBUG] Documents persisted successfully")
+            logger.debug("Documents persisted successfully")
         except Exception as e:
-            print(f"[DEBUG] Error persisting documents: {e}")
+            logger.error("Error persisting documents: %s", e)
 
         # 追加後のドキュメント数を確認
         try:
             total_docs = len(self.vectorstore.get()['ids'])
-            print(f"[DEBUG] Total documents in store: {total_docs}")
+            logger.info("Total documents in store: %d", total_docs)
         except Exception as e:
-            print(f"[DEBUG] Error counting documents: {e}")
+            logger.error("Error counting documents: %s", e)
 
         # BM25インデックスを再構築
         self._rebuild_bm25_index()
@@ -233,23 +220,19 @@ class RAGService:
         Returns:
             拡張されたクエリのリスト
         """
-        expansion_prompt = f"""質問: "{question}"
-
-この質問に答えるために必要な関連キーワードや言い換えを3つ生成してください。
-各キーワードは1行に1つずつ出力してください。
-キーワードのみを出力し、説明は不要です。"""
+        expansion_prompt = PromptTemplates.build_query_expansion_prompt(question)
 
         try:
-            print("[DEBUG] Expanding query...")
+            logger.debug("Expanding query...")
             expanded = self.llm.invoke(expansion_prompt)
             # 改行で分割してクリーンアップ
             keywords = [line.strip() for line in expanded.split('\n') if line.strip() and not line.strip().startswith('#')]
             # 元の質問を先頭に追加
             keywords.insert(0, question)
-            print(f"[DEBUG] Expanded queries: {keywords}")
+            logger.debug("Expanded queries: %s", keywords)
             return keywords[:4]  # 最大4つまで(元の質問+3つ)
         except Exception as e:
-            print(f"[DEBUG] Query expansion failed: {e}, using original question only")
+            logger.warning("Query expansion failed: %s, using original question only", e)
             return [question]
 
     def _hybrid_search(self, question: str, k: int = 5, vector_weight: float = 0.5) -> List[Tuple]:
@@ -264,7 +247,7 @@ class RAGService:
         Returns:
             (Document, スコア)のタプルのリスト
         """
-        print(f"[DEBUG] Hybrid search: question='{question}', k={k}, vector_weight={vector_weight}")
+        logger.debug("Hybrid search: question='%s', k=%d, vector_weight=%.2f", question, k, vector_weight)
 
         # 1. ベクトル検索
         vector_results = []
@@ -272,9 +255,9 @@ class RAGService:
             # より多くの候補を取得
             vector_docs = self.vectorstore.similarity_search_with_score(question, k=k*3)
             vector_results = vector_docs
-            print(f"[DEBUG] Vector search returned {len(vector_results)} results")
+            logger.debug("Vector search returned %d results", len(vector_results))
         except Exception as e:
-            print(f"[DEBUG] Vector search error: {e}")
+            logger.error("Vector search error: %s", e)
 
         # 2. BM25検索
         bm25_results = []
@@ -282,7 +265,7 @@ class RAGService:
             try:
                 # クエリをトークン化
                 query_tokens = self._tokenize_japanese(question)
-                print(f"[DEBUG] Query tokens: {query_tokens}")
+                logger.debug("Query tokens: %s", query_tokens)
 
                 # BM25スコアを取得
                 bm25_scores = self.bm25_index.get_scores(query_tokens)
@@ -293,13 +276,13 @@ class RAGService:
 
                 # 上位k*3件を取得
                 bm25_results = doc_score_pairs[:k*3]
-                print(f"[DEBUG] BM25 search returned {len(bm25_results)} results")
+                logger.debug("BM25 search returned %d results", len(bm25_results))
                 if bm25_results:
-                    print(f"[DEBUG] BM25 top 5 scores: {[score for _, score in bm25_results[:5]]}")
+                    logger.debug("BM25 top 5 scores: %s", [score for _, score in bm25_results[:5]])
             except Exception as e:
-                print(f"[DEBUG] BM25 search error: {e}")
+                logger.error("BM25 search error: %s", e)
         else:
-            print("[DEBUG] BM25 index not available")
+            logger.debug("BM25 index not available")
 
         # 3. スコアの正規化と統合
         combined_scores = {}
@@ -341,14 +324,15 @@ class RAGService:
         for doc_id, scores in combined_scores.items():
             final_score = (scores["vector"] * vector_weight) + (scores["bm25"] * bm25_weight)
             final_results.append((scores["doc"], final_score))
-            print(f"[DEBUG] Doc (vec={scores['vector']:.3f}, bm25={scores['bm25']:.3f}) -> final={final_score:.3f}")
+            logger.debug("Doc (vec=%.3f, bm25=%.3f) -> final=%.3f",
+                        scores['vector'], scores['bm25'], final_score)
 
         # スコア順でソート（高い方が良い）
         final_results.sort(key=lambda x: x[1], reverse=True)
 
         # 上位k件を返す
         top_results = final_results[:k]
-        print(f"[DEBUG] Hybrid search returning top {len(top_results)} results")
+        logger.debug("Hybrid search returning top %d results", len(top_results))
 
         return top_results
 
@@ -357,10 +341,10 @@ class RAGService:
         # デフォルト値を設定
         params = {
             "model": model_name or self.model_name,
-            "base_url": "http://localhost:11434",
-            "temperature": kwargs.get("temperature", 0.3),
-            "top_p": kwargs.get("top_p", 0.9),
-            "repeat_penalty": kwargs.get("repeat_penalty", 1.1),
+            "base_url": RAGConfig.OLLAMA_BASE_URL,
+            "temperature": kwargs.get("temperature", RAGConfig.DEFAULT_TEMPERATURE),
+            "top_p": kwargs.get("top_p", RAGConfig.DEFAULT_TOP_P),
+            "repeat_penalty": kwargs.get("repeat_penalty", RAGConfig.DEFAULT_REPEAT_PENALTY),
         }
 
         # オプショナルパラメータを追加（Noneでない場合のみ）
@@ -395,10 +379,10 @@ class RAGService:
         Returns:
             回答、参照元、スコア情報のタプル
         """
-        print(f"[DEBUG] Query received: {question}")
-        print(f"[DEBUG] Model: {model_name if model_name else f'default ({self.model_name})'}")
-        print(f"[DEBUG] Use RAG: {use_rag}")
-        print(f"[DEBUG] Query expansion: {enable_query_expansion}")
+        logger.debug("Query received: %s", question)
+        logger.debug("Model: %s", model_name if model_name else f'default ({self.model_name})')
+        logger.debug("Use RAG: %s", use_rag)
+        logger.debug("Query expansion: %s", enable_query_expansion)
 
         # ベクトルストアの内容を確認
         try:
@@ -408,10 +392,10 @@ class RAGService:
                 for metadata in all_docs["metadatas"]:
                     if metadata and "source_file" in metadata:
                         unique_sources.add(metadata["source_file"])
-                print(f"[DEBUG] Documents in vectorstore: {sorted(unique_sources)}")
-                print(f"[DEBUG] Total chunks: {len(all_docs['metadatas'])}")
+                logger.debug("Documents in vectorstore: %s", sorted(unique_sources))
+                logger.debug("Total chunks: %s", len(all_docs['metadatas']))
         except Exception as e:
-            print(f"[DEBUG] Error checking vectorstore: {e}")
+            logger.debug("Error checking vectorstore: %s", e)
 
         # クエリ拡張
         queries = self._expand_query(question) if enable_query_expansion else [question]
@@ -433,7 +417,7 @@ class RAGService:
                         seen_content.add(content_hash)
                         all_docs_with_scores.append((doc, score))
             except Exception as e:
-                print(f"[DEBUG] Error searching with query '{query}': {e}")
+                logger.debug("Error searching with query '{query}': %s", e)
 
         # パラメータをまとめる
         llm_params = {
@@ -447,7 +431,7 @@ class RAGService:
         }
 
         if len(all_docs_with_scores) == 0:
-            print("[DEBUG] No documents found in vector store. Responding without RAG context.")
+            logger.debug("No documents found in vector store. Responding without RAG context.")
             # ドキュメントがない場合は、RAGなしでLLMに直接質問
             llm = self._create_ollama_instance(model_name, **llm_params)
 
@@ -465,19 +449,19 @@ class RAGService:
         all_docs_with_scores.sort(key=lambda x: x[1])
 
         # デバッグ: 検索結果の上位20件を表示
-        print(f"[DEBUG] Top 20 search results:")
+        logger.debug("Top 20 search results:")
         for i, (doc, score) in enumerate(all_docs_with_scores[:20]):
             source = doc.metadata.get("source_file", "Unknown")
-            print(f"  {i+1}. {source}: {score:.2f}")
+            logger.debug("  %d. %s: %.2f", i+1, source, score)
 
         # test_006がどこにあるか確認
         for i, (doc, score) in enumerate(all_docs_with_scores):
             source = doc.metadata.get("source_file", "Unknown")
             if "test_006" in source:
-                print(f"[DEBUG] >>> test_006_emc_test.txt found at position {i+1} with score {score:.2f}")
+                logger.debug(">>> test_006_emc_test.txt found at position %d with score %.2f", i+1, score)
                 break
         else:
-            print(f"[DEBUG] >>> test_006_emc_test.txt NOT FOUND in search results!")
+            logger.debug(">>> test_006_emc_test.txt NOT FOUND in search results!")
 
         top_docs_with_scores = all_docs_with_scores[:k]
         top_docs = [doc for doc, _score in top_docs_with_scores]
@@ -623,10 +607,10 @@ class RAGService:
         Yields:
             回答のチャンク
         """
-        print(f"[DEBUG] Stream query received: {question}")
-        print(f"[DEBUG] Use RAG: {use_rag}")
-        print(f"[DEBUG] Query expansion: {enable_query_expansion}")
-        print(f"[DEBUG] Hybrid search: {use_hybrid_search}")
+        logger.debug("Stream query received: %s", question)
+        logger.debug("Use RAG: %s", use_rag)
+        logger.debug("Query expansion: %s", enable_query_expansion)
+        logger.debug("Hybrid search: %s", use_hybrid_search)
 
         # ベクトルストアの内容を確認
         try:
@@ -636,17 +620,17 @@ class RAGService:
                 for metadata in all_docs["metadatas"]:
                     if metadata and "source_file" in metadata:
                         unique_sources.add(metadata["source_file"])
-                print(f"[DEBUG] Documents in vectorstore: {sorted(unique_sources)}")
-                print(f"[DEBUG] Total chunks: {len(all_docs['metadatas'])}")
+                logger.debug("Documents in vectorstore: %s", sorted(unique_sources))
+                logger.debug("Total chunks: %s", len(all_docs['metadatas']))
 
                 # test_006のチャンク内容を確認
                 for i, metadata in enumerate(all_docs["metadatas"]):
                     if metadata and metadata.get("source_file") == "test_006_emc_test.txt":
                         content = all_docs["documents"][i][:100]  # 最初の100文字
-                        print(f"[DEBUG] test_006 chunk found: '{content}...'")
+                        logger.debug("test_006 chunk found: '%s...'", content)
                         break
         except Exception as e:
-            print(f"[DEBUG] Error checking vectorstore: {e}")
+            logger.debug("Error checking vectorstore: %s", e)
 
         # パラメータをまとめる
         llm_params = {
@@ -661,7 +645,7 @@ class RAGService:
 
         # RAG OFF の場合は直接LLMに質問
         if not use_rag:
-            print("[DEBUG] RAG is disabled. Querying LLM directly without document context.")
+            logger.debug("RAG is disabled. Querying LLM directly without document context.")
 
             simple_prompt = f"""あなたは親切で知識豊富なアシスタントです。以下の質問に答えてください。
 
@@ -682,7 +666,7 @@ class RAGService:
 
         if use_hybrid_search:
             # ハイブリッド検索を使用
-            print("[DEBUG] Using hybrid search (BM25 + Vector)")
+            logger.debug("Using hybrid search (BM25 + Vector)")
             for query in queries:
                 try:
                     docs_with_scores = self._hybrid_search(query, k=k * search_multiplier, vector_weight=0.5)
@@ -692,9 +676,9 @@ class RAGService:
                             seen_content.add(content_hash)
                             all_docs_with_scores.append((doc, score))
                 except Exception as e:
-                    print(f"[DEBUG] Hybrid search error with query '{query}': {e}")
+                    logger.debug("Hybrid search error with query '{query}': %s", e)
                     # フォールバック: ベクトル検索のみ
-                    print("[DEBUG] Falling back to vector search only")
+                    logger.debug("Falling back to vector search only")
                     docs_with_scores = self.vectorstore.similarity_search_with_score(query, k=k * search_multiplier)
                     for doc, score in docs_with_scores:
                         content_hash = hash(doc.page_content[:200])
@@ -703,7 +687,7 @@ class RAGService:
                             all_docs_with_scores.append((doc, score))
         else:
             # 従来のベクトル検索のみ
-            print("[DEBUG] Using vector search only")
+            logger.debug("Using vector search only")
             for query in queries:
                 try:
                     docs_with_scores = self.vectorstore.similarity_search_with_score(query, k=k * search_multiplier)
@@ -713,7 +697,7 @@ class RAGService:
                             seen_content.add(content_hash)
                             all_docs_with_scores.append((doc, score))
                 except Exception as e:
-                    print(f"[DEBUG] Error searching with query '{query}': {e}")
+                    logger.debug("Error searching with query '{query}': %s", e)
 
         # ドキュメントがない場合
         if len(all_docs_with_scores) == 0:
@@ -734,19 +718,19 @@ class RAGService:
             all_docs_with_scores.sort(key=lambda x: x[1])
 
         # デバッグ: 検索結果の上位20件を表示
-        print(f"[DEBUG] Top 20 search results:")
+        logger.debug("Top 20 search results:")
         for i, (doc, score) in enumerate(all_docs_with_scores[:20]):
             source = doc.metadata.get("source_file", "Unknown")
-            print(f"  {i+1}. {source}: {score:.2f}")
+            logger.debug("  %d. %s: %.2f", i+1, source, score)
 
         # test_006がどこにあるか確認
         for i, (doc, score) in enumerate(all_docs_with_scores):
             source = doc.metadata.get("source_file", "Unknown")
             if "test_006" in source:
-                print(f"[DEBUG] >>> test_006_emc_test.txt found at position {i+1} with score {score:.2f}")
+                logger.debug(">>> test_006_emc_test.txt found at position %d with score %.2f", i+1, score)
                 break
         else:
-            print(f"[DEBUG] >>> test_006_emc_test.txt NOT FOUND in search results!")
+            logger.debug(">>> test_006_emc_test.txt NOT FOUND in search results!")
 
         top_docs_with_scores = all_docs_with_scores[:k]
 
@@ -841,10 +825,10 @@ class RAGService:
         """
         try:
             collection = self.vectorstore.get()
-            print(f"[DEBUG] Collection data: {collection}")  # デバッグ用
+            logger.debug("Collection data: %s", collection)  # デバッグ用
 
             if not collection or "metadatas" not in collection or not collection["metadatas"]:
-                print("[DEBUG] No documents in collection")
+                logger.debug("No documents in collection")
                 return []
 
             sources = set()
@@ -852,10 +836,10 @@ class RAGService:
                 if metadata and "source_file" in metadata:
                     sources.add(metadata["source_file"])
 
-            print(f"[DEBUG] Found documents: {list(sources)}")
+            logger.debug("Found documents: %s", list(sources))
             return sorted(list(sources))
         except Exception as e:
-            print(f"[DEBUG] Error in list_documents: {e}")
+            logger.debug("Error in list_documents: %s", e)
             return []
 
     def delete_document(self, filename: str) -> bool:
@@ -869,7 +853,7 @@ class RAGService:
             削除成功したかどうか
         """
         try:
-            print(f"[DEBUG] Deleting document: {filename}")
+            logger.debug("Deleting document: %s", filename)
             collection = self.vectorstore._collection
 
             # ファイル名に一致するIDを取得
@@ -882,16 +866,16 @@ class RAGService:
 
             if ids_to_delete:
                 collection.delete(ids=ids_to_delete)
-                print(f"[DEBUG] Deleted {len(ids_to_delete)} chunks from {filename}")
+                logger.debug("Deleted %d chunks from %s", len(ids_to_delete), filename)
                 # BM25インデックスを再構築
                 self._rebuild_bm25_index()
                 return True
             else:
-                print(f"[DEBUG] No chunks found for {filename}")
+                logger.debug("No chunks found for %s", filename)
                 return False
 
         except Exception as e:
-            print(f"[DEBUG] Error deleting document: {e}")
+            logger.debug("Error deleting document: %s", e)
             return False
 
     def get_document_content(self, filename: str) -> str:
@@ -905,7 +889,7 @@ class RAGService:
             ドキュメントの内容（テキスト）
         """
         try:
-            print(f"[DEBUG] Getting content for document: {filename}")
+            logger.debug("Getting content for document: %s", filename)
             collection = self.vectorstore._collection
             all_data = collection.get()
 
@@ -919,7 +903,7 @@ class RAGService:
                     })
 
             if not chunks:
-                print(f"[DEBUG] No chunks found for {filename}")
+                logger.debug("No chunks found for %s", filename)
                 return None
 
             # ページ番号でソート（PDFの場合）
@@ -927,12 +911,12 @@ class RAGService:
 
             # 全チャンクを結合
             content = '\n\n---\n\n'.join([chunk['text'] for chunk in chunks])
-            print(f"[DEBUG] Retrieved {len(chunks)} chunks for {filename}")
+            logger.debug("Retrieved %d chunks for %s", len(chunks), filename)
 
             return content
 
         except Exception as e:
-            print(f"[DEBUG] Error getting document content: {e}")
+            logger.debug("Error getting document content: %s", e)
             return None
 
     def clear_documents(self) -> None:
@@ -943,7 +927,7 @@ class RAGService:
         import time
         import gc
 
-        print("[DEBUG] Clearing all documents...")
+        logger.debug("Clearing all documents...")
 
         try:
             # 既存のベクトルストアへの参照を解放
@@ -956,26 +940,26 @@ class RAGService:
                         all_ids = collection.get()['ids']
                         if all_ids:
                             collection.delete(ids=all_ids)
-                            print(f"[DEBUG] Deleted {len(all_ids)} items from collection")
+                            logger.debug("Deleted %s items from collection", len(all_ids))
                 except Exception as e:
-                    print(f"[DEBUG] Error clearing collection: {e}")
+                    logger.debug("Error clearing collection: %s", e)
 
                 self.vectorstore = None
                 gc.collect()  # ガベージコレクション実行
 
             # ディレクトリが存在する場合は削除
             if os.path.exists(self.persist_directory):
-                print(f"[DEBUG] Removing directory: {self.persist_directory}")
+                logger.debug("Removing directory: %s", self.persist_directory)
                 try:
                     shutil.rmtree(self.persist_directory)
-                    print("[DEBUG] Directory removed successfully")
+                    logger.debug("Directory removed successfully")
                 except Exception as e:
-                    print(f"[DEBUG] Error removing directory: {e}")
+                    logger.debug("Error removing directory: %s", e)
                 # ディレクトリ削除後、少し待機
                 time.sleep(0.5)
 
             # 新しいベクトルストアを作成
-            print("[DEBUG] Creating new vector store...")
+            logger.debug("Creating new vector store...")
             self.vectorstore = Chroma(
                 persist_directory=self.persist_directory,
                 embedding_function=self.embeddings
@@ -984,14 +968,14 @@ class RAGService:
             # 空であることを確認
             try:
                 count = len(self.vectorstore.get()['ids'])
-                print(f"[DEBUG] New vector store created with {count} documents")
+                logger.debug("New vector store created with %s documents", count)
             except:
-                print("[DEBUG] New vector store created (empty)")
+                logger.debug("New vector store created (empty)")
 
-            print("[DEBUG] Documents cleared successfully")
+            logger.debug("Documents cleared successfully")
 
         except Exception as e:
-            print(f"[DEBUG] Error clearing documents: {e}")
+            logger.debug("Error clearing documents: %s", e)
             import traceback
             traceback.print_exc()
             # エラーが発生しても新しいベクトルストアを作成
@@ -1018,7 +1002,7 @@ class RAGService:
             else:
                 return []
         except Exception as e:
-            print(f"[DEBUG] Exception fetching models: {e}")
+            logger.debug("Exception fetching models: %s", e)
             return []
 
     def check_ollama_connection(self) -> bool:
@@ -1034,7 +1018,7 @@ class RAGService:
             response = requests.get("http://localhost:11434/api/tags", timeout=2)
             return response.status_code == 200
         except Exception as e:
-            print(f"[DEBUG] Ollama connection check failed: {e}")
+            logger.debug("Ollama connection check failed: %s", e)
             return False
 
     def get_available_models(self) -> List[str]:
@@ -1045,5 +1029,5 @@ class RAGService:
             モデル名のリスト
         """
         models = self._get_available_models_static()
-        print(f"[DEBUG] Found {len(models)} models: {models}")
+        logger.debug("Found %d models: %s", len(models), models)
         return models

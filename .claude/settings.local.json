@@ -20,7 +20,9 @@
       "Bash(\".venv/Scripts/python.exe\" -m pip install rank-bm25)",
       "Bash(source:*)",
       "Bash(pip install:*)",
-      "Bash(.venv/Scripts/python.exe:*)"
+      "Bash(.venv/Scripts/python.exe:*)",
+      "Bash(dir:*)",
+      "Bash(sqlite3:*)"
     ]
   }
 }
