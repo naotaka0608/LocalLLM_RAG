@@ -53,6 +53,16 @@ class QueryRequest(BaseModel):
     mirostat_tau: Optional[float] = None
     mirostat_eta: Optional[float] = None
     tfs_z: Optional[float] = None
+    # 追加の詳細パラメータ
+    stop: Optional[List[str]] = None  # 停止シーケンス
+    presence_penalty: Optional[float] = None  # 新トピック促進
+    frequency_penalty: Optional[float] = None  # 頻度ペナルティ
+    min_p: Optional[float] = None  # 最小確率閾値
+    repeat_last_n: Optional[int] = None  # ペナルティ範囲
+    num_thread: Optional[int] = None  # スレッド数
+    num_gpu: Optional[int] = None  # GPU層の数
+    typical_p: Optional[float] = None  # Typical sampling
+    penalize_newline: Optional[bool] = None  # 改行ペナルティ
 
 
 class SourceInfo(BaseModel):
@@ -142,7 +152,16 @@ async def query(request: QueryRequest):
             mirostat=request.mirostat,
             mirostat_tau=request.mirostat_tau,
             mirostat_eta=request.mirostat_eta,
-            tfs_z=request.tfs_z
+            tfs_z=request.tfs_z,
+            stop=request.stop,
+            presence_penalty=request.presence_penalty,
+            frequency_penalty=request.frequency_penalty,
+            min_p=request.min_p,
+            repeat_last_n=request.repeat_last_n,
+            num_thread=request.num_thread,
+            num_gpu=request.num_gpu,
+            typical_p=request.typical_p,
+            penalize_newline=request.penalize_newline
         )
         return QueryResponse(answer=answer, sources=sources, source_scores=source_scores)
     except Exception as e:
@@ -178,7 +197,16 @@ async def query_stream(request: QueryRequest):
                 mirostat=request.mirostat,
                 mirostat_tau=request.mirostat_tau,
                 mirostat_eta=request.mirostat_eta,
-                tfs_z=request.tfs_z
+                tfs_z=request.tfs_z,
+                stop=request.stop,
+                presence_penalty=request.presence_penalty,
+                frequency_penalty=request.frequency_penalty,
+                min_p=request.min_p,
+                repeat_last_n=request.repeat_last_n,
+                num_thread=request.num_thread,
+                num_gpu=request.num_gpu,
+                typical_p=request.typical_p,
+                penalize_newline=request.penalize_newline
             ):
                 # チャンクの先頭の改行を削除してから送信
                 yield f"data: {chunk.lstrip()}\n\n"

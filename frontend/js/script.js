@@ -28,7 +28,16 @@ let performanceSettings = {
     mirostat: null,
     mirostatTau: null,
     mirostatEta: null,
-    tfsZ: null
+    tfsZ: null,
+    // 追加の詳細パラメータ
+    minP: null,
+    presencePenalty: null,
+    frequencyPenalty: null,
+    repeatLastN: null,
+    typicalP: null,
+    numThread: null,
+    numGpu: null,
+    penalizeNewline: null
 };
 
 // カスタムプリセット
@@ -699,7 +708,16 @@ async function sendQuestion() {
             mirostat: performanceSettings.mirostat,
             mirostat_tau: performanceSettings.mirostatTau,
             mirostat_eta: performanceSettings.mirostatEta,
-            tfs_z: performanceSettings.tfsZ
+            tfs_z: performanceSettings.tfsZ,
+            // 追加の詳細パラメータ
+            min_p: performanceSettings.minP,
+            presence_penalty: performanceSettings.presencePenalty,
+            frequency_penalty: performanceSettings.frequencyPenalty,
+            repeat_last_n: performanceSettings.repeatLastN,
+            typical_p: performanceSettings.typicalP,
+            num_thread: performanceSettings.numThread,
+            num_gpu: performanceSettings.numGpu,
+            penalize_newline: document.getElementById('penalizeNewlineToggle')?.checked || null
         };
 
         // モデルが選択されている場合のみ追加
@@ -1394,6 +1412,48 @@ function updateMirostatEta(value) {
 function updateTfsZ(value) {
     performanceSettings.tfsZ = parseFloat(value);
     document.getElementById('tfsZValue').textContent = value;
+    localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
+}
+
+function updateMinP(value) {
+    performanceSettings.minP = parseFloat(value);
+    document.getElementById('minPValue').textContent = value;
+    localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
+}
+
+function updatePresencePenalty(value) {
+    performanceSettings.presencePenalty = parseFloat(value);
+    document.getElementById('presencePenaltyValue').textContent = value;
+    localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
+}
+
+function updateFrequencyPenalty(value) {
+    performanceSettings.frequencyPenalty = parseFloat(value);
+    document.getElementById('frequencyPenaltyValue').textContent = value;
+    localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
+}
+
+function updateRepeatLastN(value) {
+    performanceSettings.repeatLastN = parseInt(value);
+    document.getElementById('repeatLastNValue').textContent = value;
+    localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
+}
+
+function updateTypicalP(value) {
+    performanceSettings.typicalP = parseFloat(value);
+    document.getElementById('typicalPValue').textContent = value;
+    localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
+}
+
+function updateNumThread(value) {
+    performanceSettings.numThread = parseInt(value);
+    document.getElementById('numThreadValue').textContent = value;
+    localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
+}
+
+function updateNumGpu(value) {
+    performanceSettings.numGpu = parseInt(value);
+    document.getElementById('numGpuValue').textContent = value;
     localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
 }
 

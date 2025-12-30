@@ -373,7 +373,10 @@ class RAGService:
     def query(self, question: str, k: int = 5, search_multiplier: int = 10, model_name: str = None, use_rag: bool = True, enable_query_expansion: bool = False,
               chat_history: list = None, temperature: float = None, top_p: float = None, repeat_penalty: float = None,
               num_predict: int = None, top_k: int = None, num_ctx: int = None, seed: int = None,
-              mirostat: int = None, mirostat_tau: float = None, mirostat_eta: float = None, tfs_z: float = None) -> Tuple[str, List[str], List[dict]]:
+              mirostat: int = None, mirostat_tau: float = None, mirostat_eta: float = None, tfs_z: float = None,
+              stop: list = None, presence_penalty: float = None, frequency_penalty: float = None, min_p: float = None,
+              repeat_last_n: int = None, num_thread: int = None, num_gpu: int = None, typical_p: float = None,
+              penalize_newline: bool = None) -> Tuple[str, List[str], List[dict]]:
         """
         質問に対してRAGで回答を生成
 
@@ -435,7 +438,10 @@ class RAGService:
             "temperature": temperature, "top_p": top_p, "repeat_penalty": repeat_penalty,
             "num_predict": num_predict, "top_k": top_k, "num_ctx": num_ctx,
             "seed": seed, "mirostat": mirostat, "mirostat_tau": mirostat_tau,
-            "mirostat_eta": mirostat_eta, "tfs_z": tfs_z
+            "mirostat_eta": mirostat_eta, "tfs_z": tfs_z,
+            "stop": stop, "presence_penalty": presence_penalty, "frequency_penalty": frequency_penalty,
+            "min_p": min_p, "repeat_last_n": repeat_last_n, "num_thread": num_thread,
+            "num_gpu": num_gpu, "typical_p": typical_p, "penalize_newline": penalize_newline
         }
 
         if len(all_docs_with_scores) == 0:
@@ -592,7 +598,10 @@ class RAGService:
     async def query_stream(self, question: str, k: int = 5, search_multiplier: int = 10, model_name: str = None, use_rag: bool = True, enable_query_expansion: bool = False,
                           use_hybrid_search: bool = True, chat_history: list = None, temperature: float = None, top_p: float = None, repeat_penalty: float = None,
                           num_predict: int = None, top_k: int = None, num_ctx: int = None, seed: int = None,
-                          mirostat: int = None, mirostat_tau: float = None, mirostat_eta: float = None, tfs_z: float = None):
+                          mirostat: int = None, mirostat_tau: float = None, mirostat_eta: float = None, tfs_z: float = None,
+                          stop: list = None, presence_penalty: float = None, frequency_penalty: float = None, min_p: float = None,
+                          repeat_last_n: int = None, num_thread: int = None, num_gpu: int = None, typical_p: float = None,
+                          penalize_newline: bool = None):
         """
         質問に対してRAGで回答を生成（ストリーミング）
 
@@ -640,7 +649,10 @@ class RAGService:
             "temperature": temperature, "top_p": top_p, "repeat_penalty": repeat_penalty,
             "num_predict": num_predict, "top_k": top_k, "num_ctx": num_ctx,
             "seed": seed, "mirostat": mirostat, "mirostat_tau": mirostat_tau,
-            "mirostat_eta": mirostat_eta, "tfs_z": tfs_z
+            "mirostat_eta": mirostat_eta, "tfs_z": tfs_z,
+            "stop": stop, "presence_penalty": presence_penalty, "frequency_penalty": frequency_penalty,
+            "min_p": min_p, "repeat_last_n": repeat_last_n, "num_thread": num_thread,
+            "num_gpu": num_gpu, "typical_p": typical_p, "penalize_newline": penalize_newline
         }
 
         # RAG OFF の場合は直接LLMに質問
