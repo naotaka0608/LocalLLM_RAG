@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# 仮想環境
+.venv/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# データベース（ビルド時は除外、ボリュームマウントで管理）
+chroma_db/
+*.db
+*.sqlite
+
+# アップロードファイル（ビルド時は除外、ボリュームマウントで管理）
+uploads/
+
+# ログ
+*.log
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# ドキュメント
+README.md
+README_DEPLOY.md
+
+# テスト
+tests/
+test_*.txt
+*.test.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# その他
+*.bak
+*.tmp
+*.temp
