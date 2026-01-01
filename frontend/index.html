@@ -659,6 +659,39 @@
                     <h2>⚙️ システム状態</h2>
                     <div id="healthStatus">確認中...</div>
                 </div>
+
+                <div class="card">
+                    <h2>💬 キャラクター設定</h2>
+                    <div style="margin-bottom: 15px;">
+                        <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 8px; font-weight: 600;">
+                            キャラクタープリセット
+                        </label>
+                        <select id="characterPreset" onchange="toggleCustomCharacter()" style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 5px; font-size: 0.95rem;">
+                            <option value="">なし（デフォルト）</option>
+                            <option value="samurai">侍</option>
+                            <option value="teacher">先生</option>
+                            <option value="gyaru">ギャル</option>
+                            <option value="kansai">関西弁</option>
+                            <option value="scientist">科学者</option>
+                            <option value="cat">猫</option>
+                            <option value="moe">萌え系</option>
+                            <option value="custom">カスタム</option>
+                        </select>
+                        <div style="font-size: 0.75rem; color: #999; margin-top: 5px;">AIの話し方を変更できます</div>
+                    </div>
+
+                    <div id="customCharacterSection" style="display: none;">
+                        <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 8px; font-weight: 600;">
+                            カスタムキャラクター設定
+                        </label>
+                        <textarea id="customCharacterPrompt"
+                                  placeholder="例: あなたは親切なロボットです。丁寧で論理的に説明してください。"
+                                  rows="4"
+                                  oninput="saveCustomCharacterPrompt()"
+                                  style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 5px; font-family: inherit; resize: vertical; font-size: 0.95rem;"></textarea>
+                        <div style="font-size: 0.75rem; color: #999; margin-top: 5px;">AIの振る舞いを自由に指定できます</div>
+                    </div>
+                </div>
             </div>
         </div>
         </div>

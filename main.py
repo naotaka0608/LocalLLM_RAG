@@ -38,6 +38,7 @@ class QueryRequest(BaseModel):
     query_expansion: bool = False
     use_hybrid_search: bool = True  # ハイブリッド検索のON/OFF
     chat_history: Optional[List[Message]] = None  # 会話履歴
+    system_prompt: Optional[str] = None  # システムプロンプト（キャラクター設定）
     # 主要パラメータ (★)
     temperature: Optional[float] = None
     document_count: Optional[int] = None
@@ -185,6 +186,7 @@ async def query_stream(request: QueryRequest):
                 enable_query_expansion=request.query_expansion,
                 use_hybrid_search=request.use_hybrid_search,
                 chat_history=chat_history,
+                system_prompt=request.system_prompt,
                 temperature=request.temperature,
                 k=request.document_count,
                 search_multiplier=request.search_multiplier,

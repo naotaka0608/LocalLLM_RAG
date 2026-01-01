@@ -9,7 +9,9 @@ let currentChatId = null;
 
 // ストリーミング中断用
 let currentAbortController = null;
+let currentReader = null;  // 追加: reader への参照を保持
 let isGenerating = false;
+let shouldStopGeneration = false;  // 停止フラグ
 
 // 性能設定
 let performanceSettings = {
@@ -37,7 +39,21 @@ let performanceSettings = {
     typicalP: null,
     numThread: null,
     numGpu: null,
-    penalizeNewline: null
+    penalizeNewline: null,
+    // キャラクター設定
+    characterPreset: '',
+    customCharacterPrompt: ''
+};
+
+// キャラクタープリセット定義
+const characterPresets = {
+    samurai: "あなたは江戸時代の侍です。古風で格調高い言葉遣いを使い、武士道の精神を重んじて回答してください。「～でござる」「～候」などの表現を使用してください。敬語を用いて、礼儀正しく接してください。",
+    teacher: "あなたは優しく丁寧な学校の先生です。分かりやすい説明を心がけ、専門用語を使う際は必ず解説を加えてください。生徒の理解を第一に考え、励ましの言葉も交えながら回答してください。",
+    gyaru: "あなたは明るく元気なギャルです。フレンドリーでカジュアルな口調で話してください。「～だよね」「マジで」「ヤバい」「超」などの若者言葉を使い、親しみやすく接してください。たまに「☆」「♪」などの記号も使ってOKです。",
+    kansai: "あなたは関西人です。関西弁で親しみやすく話してください。「～やで」「～やん」「めっちゃ」「ほんま」「せやな」などの関西弁を積極的に使用してください。明るくて気さくな雰囲気で回答してください。",
+    scientist: "あなたは論理的で知識豊富な科学者です。客観的な事実に基づき、科学的根拠を示しながら説明してください。専門用語も積極的に使用し、正確性を重視してください。仮説と事実を明確に区別して説明してください。",
+    cat: "あなたは人間の言葉を話せる猫です。「にゃ」「にゃん」「にゃー」などの語尾を使い、猫らしい自由気ままな性格で回答してください。時々気まぐれで、甘えたり、ツンデレな態度を見せたりしてください。",
+    moe: "あなたは可愛らしい萌え系キャラクターです。「～です♪」「～ですよ☆」「えへへ」「わぁ！」など、可愛らしい表現を使ってください。明るく元気で、少し天然な性格です。語尾に「♪」「☆」「♡」などの記号を使うこともあります。"
 };
 
 // カスタムプリセット
@@ -756,6 +772,14 @@ async function sendQuestion() {
             requestBody.model = selectedModel;
         }
 
+        // システムプロンプトを追加
+        const systemPrompt = getSystemPrompt();
+        console.log('[DEBUG] Character preset:', performanceSettings.characterPreset);
+        console.log('[DEBUG] System prompt:', systemPrompt);
+        if (systemPrompt) {
+            requestBody.system_prompt = systemPrompt;
+        }
+
         const response = await fetch(`${API_BASE_URL}/query/stream`, {
             method: 'POST',
             headers: {
@@ -966,33 +990,32 @@ async function sendQuestion() {
 
         // AbortErrorの場合は停止メッセージを表示（途中まで生成されたテキストは保持）
         if (error.name === 'AbortError') {
+            console.log('[DEBUG] AbortError caught, stopping UI animations');
             const errorMessageDiv = document.getElementById(messageId);
             if (errorMessageDiv) {
-                // 点滅カーソルを削除
-                const cursor = errorMessageDiv.querySelector('.streaming-cursor');
-                if (cursor) {
-                    cursor.remove();
-                }
+                console.log('[DEBUG] Found error message div:', messageId);
+                const streamingContent = errorMessageDiv.querySelector('.streaming-content');
+                console.log('[DEBUG] streamingContent found:', !!streamingContent);
 
-                // テキストエリアを見つけてHTMLを更新（カーソルなしのテキストのみ、改行対応）
-                const textElement = errorMessageDiv.querySelector('[id^="streamingText-"]');
-                if (textElement) {
-                    textElement.innerHTML = formatAnswerText(fullAnswer);
-                }
+                // streaming-contentの中身を確認して、回答があれば保持
+                if (streamingContent) {
+                    // 既存のテキスト要素を探す
+                    const textElement = streamingContent.querySelector('[id^="streamingText-"]');
+                    const existingText = textElement ? textElement.textContent : '';
 
-                // 速度表示を停止メッセージに変更
-                const speedDisplay = errorMessageDiv.querySelector('.speed-display');
-                if (speedDisplay) {
-                    speedDisplay.innerHTML = '<span style="font-weight: bold;">⏹ 生成を停止しました</span>';
-                    speedDisplay.style.background = '#fff3e0';
-                    speedDisplay.style.color = '#ff9800';
-                }
-            }
+                    console.log('[DEBUG] Existing text length:', existingText.length);
 
-            // 途中まで生成されたテキストを履歴に保存
-            if (fullAnswer) {
-                saveMessageToHistory('あなた', question, 'user');
-                saveMessageToHistory('アシスタント', fullAnswer + '\n[生成を停止]', 'assistant', sourcesData, sourceScores);
+                    // 停止メッセージを表示（既存のテキストを保持）
+                    const speedDisplay = streamingContent.querySelector('.speed-display, [style*="font-size: 0.75rem"]');
+                    if (speedDisplay) {
+                        speedDisplay.innerHTML = '<span style="font-weight: bold; color: #ff9800;">⏹ 生成を停止しました</span>';
+                        speedDisplay.style.background = '#fff3e0';
+                    }
+
+                    console.log('[DEBUG] Stop message displayed');
+                }
+            } else {
+                console.log('[DEBUG] ERROR: errorMessageDiv not found for messageId:', messageId);
             }
         } else {
             const errorMessageDiv = document.getElementById(messageId);
@@ -1618,6 +1641,10 @@ function updateAllParameterUI() {
 }
 
 // 設定の読み込み
+function savePerformanceSettings() {
+    localStorage.setItem('performanceSettings', JSON.stringify(performanceSettings));
+}
+
 function loadPerformanceSettings() {
     const savedPreset = localStorage.getItem('performancePreset');
     const savedSettings = localStorage.getItem('performanceSettings');
@@ -1635,6 +1662,22 @@ function loadPerformanceSettings() {
     if (savedPreset) {
         document.getElementById('performancePreset').value = savedPreset;
         applyPerformancePreset();
+    }
+
+    // キャラクター設定を復元
+    if (performanceSettings.characterPreset) {
+        const presetSelect = document.getElementById('characterPreset');
+        if (presetSelect) {
+            presetSelect.value = performanceSettings.characterPreset;
+            toggleCustomCharacter();
+        }
+    }
+
+    if (performanceSettings.customCharacterPrompt) {
+        const customPromptTextarea = document.getElementById('customCharacterPrompt');
+        if (customPromptTextarea) {
+            customPromptTextarea.value = performanceSettings.customCharacterPrompt;
+        }
     }
 }
 
@@ -1699,3 +1742,47 @@ function initMobileSidebarToggle() {
 
 // モバイルサイドバートグルを初期化
 initMobileSidebarToggle();
+
+// キャラクター設定関連の関数
+
+// カスタムキャラクター入力欄の表示切り替え
+function toggleCustomCharacter() {
+    const preset = document.getElementById('characterPreset').value;
+    const customSection = document.getElementById('customCharacterSection');
+
+    console.log('[DEBUG] toggleCustomCharacter called, preset:', preset);
+
+    if (preset === 'custom') {
+        customSection.style.display = 'block';
+    } else {
+        customSection.style.display = 'none';
+    }
+
+    // 設定を保存
+    performanceSettings.characterPreset = preset;
+    savePerformanceSettings();
+    console.log('[DEBUG] Character preset saved:', performanceSettings.characterPreset);
+}
+
+// システムプロンプトを取得
+function getSystemPrompt() {
+    const preset = performanceSettings.characterPreset;
+
+    if (!preset) {
+        return null;  // プリセットなし
+    }
+
+    if (preset === 'custom') {
+        const customPrompt = document.getElementById('customCharacterPrompt')?.value.trim();
+        return customPrompt || null;
+    }
+
+    return characterPresets[preset] || null;
+}
+
+// カスタムキャラクタープロンプトを保存
+function saveCustomCharacterPrompt() {
+    const customPrompt = document.getElementById('customCharacterPrompt')?.value || '';
+    performanceSettings.customCharacterPrompt = customPrompt;
+    savePerformanceSettings();
+}
