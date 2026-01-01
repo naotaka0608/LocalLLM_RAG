@@ -267,9 +267,10 @@ function createNewChat() {
     currentChatId = chatId;
 
     // チャットエリアをクリア
+    const characterName = getCharacterName();
     document.getElementById('chatMessages').innerHTML = `
         <div class="message assistant">
-            <div class="message-header">アシスタント</div>
+            <div class="message-header">${characterName}</div>
             <div>
                 <p style="font-size: 0.95rem;">こんにちは！ファイルをアップロードして、質問してください。</p>
                 <div style="margin-top: 8px; padding: 8px; background: #f0f8ff; border-left: 3px solid #667eea; border-radius: 5px; font-size: 0.85rem;">
@@ -706,8 +707,9 @@ async function sendQuestion() {
     const messageDiv = document.createElement('div');
     messageDiv.id = messageId;
     messageDiv.className = 'message assistant';
+    const characterName = getCharacterName();
     messageDiv.innerHTML = `
-        <div class="message-header">アシスタント</div>
+        <div class="message-header">${characterName}</div>
         <div class="streaming-content">
             <div class="loading-spinner" style="display: inline-block; margin-right: 8px;"></div>
             回答を生成中...
@@ -1236,7 +1238,10 @@ function addMessage(sender, text, type = 'assistant', sources = null, sourceScor
 
     messageDiv.className = className;
 
-    let html = `<div class="message-header">${sender}</div><div>${text}</div>`;
+    // アシスタントの場合はキャラクター名を使用
+    const displayName = (type === 'assistant' && sender === 'アシスタント') ? getCharacterName() : sender;
+
+    let html = `<div class="message-header">${displayName}</div><div>${text}</div>`;
 
     if (sources && sources.length > 0) {
         const sourceId = 'sources-' + Date.now();
@@ -1744,6 +1749,28 @@ function initMobileSidebarToggle() {
 initMobileSidebarToggle();
 
 // キャラクター設定関連の関数
+
+// キャラクター名を取得
+function getCharacterName() {
+    const preset = performanceSettings.characterPreset;
+
+    const characterNames = {
+        samurai: '侍',
+        teacher: '先生',
+        gyaru: 'ギャル',
+        kansai: '関西弁',
+        scientist: '科学者',
+        cat: '猫',
+        moe: '萌え系',
+        custom: 'カスタム'
+    };
+
+    if (!preset || preset === '') {
+        return 'アシスタント';
+    }
+
+    return `アシスタント（${characterNames[preset] || preset}）`;
+}
 
 // カスタムキャラクター入力欄の表示切り替え
 function toggleCustomCharacter() {
