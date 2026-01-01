@@ -723,6 +723,33 @@
                         <div style="font-size: 0.75rem; color: #999; margin-top: 5px;">AIの振る舞いを自由に指定できます</div>
                     </div>
                 </div>
+
+                <div class="card">
+                    <h2>🎨 テーマ設定</h2>
+                    <div style="margin-bottom: 15px;">
+                        <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 8px; font-weight: 600;">
+                            カラーテーマ
+                        </label>
+                        <select id="themeSelect" onchange="changeTheme(this.value)" style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 5px; font-size: 0.95rem;">
+                            <option value="light">ライト（デフォルト）</option>
+                            <option value="dark">ダーク</option>
+                            <option value="blue">ブルー</option>
+                            <option value="green">グリーン</option>
+                            <option value="sunset">サンセット</option>
+                            <option value="ocean">オーシャン</option>
+                        </select>
+                        <div style="font-size: 0.75rem; color: #999; margin-top: 5px;">画面の配色を変更できます</div>
+                    </div>
+
+                    <div style="margin-bottom: 15px;">
+                        <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 8px; font-weight: 600;">
+                            フォントサイズ: <span id="fontSizeValue">16px</span>
+                        </label>
+                        <input type="range" id="fontSizeSlider" min="12" max="20" step="1" value="16"
+                               oninput="updateFontSize(this.value)" style="width: 100%;">
+                        <div style="font-size: 0.75rem; color: #999;">チャット画面の文字サイズを調整</div>
+                    </div>
+                </div>
             </div>
         </div>
         </div>

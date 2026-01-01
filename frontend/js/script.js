@@ -2000,4 +2000,180 @@ function clearTagFilter() {
 // ページ読み込み時にタグを読み込む
 document.addEventListener('DOMContentLoaded', function() {
     loadTags();
+    loadTheme();  // テーマを読み込み
+    loadFontSize();  // フォントサイズを読み込み
 });
+
+// ==================== テーマ設定機能 ====================
+
+// テーマ定義
+const themes = {
+    light: {
+        name: 'ライト',
+        bodyBg: '#f5f5f5',
+        chatBg: '#ffffff',
+        userMsgBg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        userMsgColor: '#ffffff',
+        assistantMsgBg: '#f8f9fa',
+        assistantMsgColor: '#333333',
+        cardBg: '#ffffff',
+        cardBorder: '#e0e0e0',
+        textColor: '#333333',
+        linkColor: '#667eea',
+        inputBg: '#ffffff',
+        inputBorder: '#e0e0e0',
+        buttonBg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        buttonHoverBg: 'linear-gradient(135deg, #5568d3 0%, #63438a 100%)',
+    },
+    dark: {
+        name: 'ダーク',
+        bodyBg: '#1a1a1a',
+        chatBg: '#2d2d2d',
+        userMsgBg: 'linear-gradient(135deg, #4a5568 0%, #2d3748 100%)',
+        userMsgColor: '#ffffff',
+        assistantMsgBg: '#3a3a3a',
+        assistantMsgColor: '#e0e0e0',
+        cardBg: '#2d2d2d',
+        cardBorder: '#444444',
+        textColor: '#e0e0e0',
+        linkColor: '#90cdf4',
+        inputBg: '#3a3a3a',
+        inputBorder: '#444444',
+        buttonBg: 'linear-gradient(135deg, #4a5568 0%, #2d3748 100%)',
+        buttonHoverBg: 'linear-gradient(135deg, #5a6578 0%, #3d4758 100%)',
+    },
+    blue: {
+        name: 'ブルー',
+        bodyBg: '#e3f2fd',
+        chatBg: '#ffffff',
+        userMsgBg: 'linear-gradient(135deg, #2196f3 0%, #1976d2 100%)',
+        userMsgColor: '#ffffff',
+        assistantMsgBg: '#f0f8ff',
+        assistantMsgColor: '#1565c0',
+        cardBg: '#ffffff',
+        cardBorder: '#90caf9',
+        textColor: '#0d47a1',
+        linkColor: '#1976d2',
+        inputBg: '#ffffff',
+        inputBorder: '#90caf9',
+        buttonBg: 'linear-gradient(135deg, #2196f3 0%, #1976d2 100%)',
+        buttonHoverBg: 'linear-gradient(135deg, #1e88e5 0%, #1565c0 100%)',
+    },
+    green: {
+        name: 'グリーン',
+        bodyBg: '#e8f5e9',
+        chatBg: '#ffffff',
+        userMsgBg: 'linear-gradient(135deg, #4caf50 0%, #388e3c 100%)',
+        userMsgColor: '#ffffff',
+        assistantMsgBg: '#f1f8f4',
+        assistantMsgColor: '#2e7d32',
+        cardBg: '#ffffff',
+        cardBorder: '#a5d6a7',
+        textColor: '#1b5e20',
+        linkColor: '#388e3c',
+        inputBg: '#ffffff',
+        inputBorder: '#a5d6a7',
+        buttonBg: 'linear-gradient(135deg, #4caf50 0%, #388e3c 100%)',
+        buttonHoverBg: 'linear-gradient(135deg, #43a047 0%, #2e7d32 100%)',
+    },
+    sunset: {
+        name: 'サンセット',
+        bodyBg: '#fff3e0',
+        chatBg: '#ffffff',
+        userMsgBg: 'linear-gradient(135deg, #ff6f00 0%, #ff5722 100%)',
+        userMsgColor: '#ffffff',
+        assistantMsgBg: '#fff8f0',
+        assistantMsgColor: '#e65100',
+        cardBg: '#ffffff',
+        cardBorder: '#ffcc80',
+        textColor: '#bf360c',
+        linkColor: '#ff6f00',
+        inputBg: '#ffffff',
+        inputBorder: '#ffcc80',
+        buttonBg: 'linear-gradient(135deg, #ff6f00 0%, #ff5722 100%)',
+        buttonHoverBg: 'linear-gradient(135deg, #f57c00 0%, #f4511e 100%)',
+    },
+    ocean: {
+        name: 'オーシャン',
+        bodyBg: '#e0f7fa',
+        chatBg: '#ffffff',
+        userMsgBg: 'linear-gradient(135deg, #00acc1 0%, #0097a7 100%)',
+        userMsgColor: '#ffffff',
+        assistantMsgBg: '#f0fafc',
+        assistantMsgColor: '#006064',
+        cardBg: '#ffffff',
+        cardBorder: '#80deea',
+        textColor: '#00838f',
+        linkColor: '#0097a7',
+        inputBg: '#ffffff',
+        inputBorder: '#80deea',
+        buttonBg: 'linear-gradient(135deg, #00acc1 0%, #0097a7 100%)',
+        buttonHoverBg: 'linear-gradient(135deg, #00a0b0 0%, #008ba0 100%)',
+    }
+};
+
+// テーマを変更
+function changeTheme(themeName) {
+    const theme = themes[themeName];
+    if (!theme) return;
+
+    // CSS変数を設定
+    const root = document.documentElement;
+    root.style.setProperty('--body-bg', theme.bodyBg);
+    root.style.setProperty('--chat-bg', theme.chatBg);
+    root.style.setProperty('--user-msg-bg', theme.userMsgBg);
+    root.style.setProperty('--user-msg-color', theme.userMsgColor);
+    root.style.setProperty('--assistant-msg-bg', theme.assistantMsgBg);
+    root.style.setProperty('--assistant-msg-color', theme.assistantMsgColor);
+    root.style.setProperty('--card-bg', theme.cardBg);
+    root.style.setProperty('--card-border', theme.cardBorder);
+    root.style.setProperty('--text-color', theme.textColor);
+    root.style.setProperty('--link-color', theme.linkColor);
+    root.style.setProperty('--input-bg', theme.inputBg);
+    root.style.setProperty('--input-border', theme.inputBorder);
+    root.style.setProperty('--button-bg', theme.buttonBg);
+    root.style.setProperty('--button-hover-bg', theme.buttonHoverBg);
+
+    // LocalStorageに保存
+    localStorage.setItem('selectedTheme', themeName);
+
+    console.log(`Theme changed to: ${themeName}`);
+}
+
+// テーマを読み込み
+function loadTheme() {
+    const savedTheme = localStorage.getItem('selectedTheme') || 'light';
+    const themeSelect = document.getElementById('themeSelect');
+
+    if (themeSelect) {
+        themeSelect.value = savedTheme;
+    }
+
+    changeTheme(savedTheme);
+}
+
+// フォントサイズを変更
+function updateFontSize(size) {
+    const root = document.documentElement;
+    root.style.setProperty('--chat-font-size', `${size}px`);
+
+    const valueSpan = document.getElementById('fontSizeValue');
+    if (valueSpan) {
+        valueSpan.textContent = `${size}px`;
+    }
+
+    // LocalStorageに保存
+    localStorage.setItem('fontSize', size);
+}
+
+// フォントサイズを読み込み
+function loadFontSize() {
+    const savedSize = localStorage.getItem('fontSize') || '16';
+    const slider = document.getElementById('fontSizeSlider');
+
+    if (slider) {
+        slider.value = savedSize;
+    }
+
+    updateFontSize(savedSize);
+}
