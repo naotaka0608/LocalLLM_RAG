@@ -729,18 +729,26 @@ class RAGService:
 
         # タグフィルタリング
         if tags and len(tags) > 0:
-            logger.debug("Filtering documents by tags: %s", tags)
+            logger.info("=== Tag Filtering Start ===")
+            logger.info("Requested tags: %s", tags)
             filtered_docs = []
             for doc, score in all_docs_with_scores:
                 # タグはカンマ区切り文字列で保存されているため、分割してリストに変換
                 doc_tags_str = doc.metadata.get("tags", "")
                 doc_tags = [t.strip() for t in doc_tags_str.split(",") if t.strip()] if doc_tags_str else []
 
+                source = doc.metadata.get("source_file", "Unknown")
+                logger.info("  Document: %s, Tags: %s", source, doc_tags)
+
                 # ドキュメントが指定されたタグのいずれかを持っているかチェック
                 if any(tag in doc_tags for tag in tags):
+                    logger.info("    -> MATCHED (keeping)")
                     filtered_docs.append((doc, score))
+                else:
+                    logger.info("    -> NOT MATCHED (filtering out)")
 
-            logger.debug("Filtered from %d to %d documents", len(all_docs_with_scores), len(filtered_docs))
+            logger.info("Filtered from %d to %d documents", len(all_docs_with_scores), len(filtered_docs))
+            logger.info("=== Tag Filtering End ===")
             all_docs_with_scores = filtered_docs
 
         # ドキュメントがない場合
@@ -1006,6 +1014,54 @@ class RAGService:
             return sorted(list(sources))
         except Exception as e:
             logger.debug("Error in list_documents: %s", e)
+            return []
+
+    def list_documents_with_tags(self) -> List[dict]:
+        """
+        登録されているドキュメントとそのタグの一覧を取得
+
+        Returns:
+            ドキュメント情報のリスト（ファイル名とタグを含む）
+        """
+        try:
+            collection = self.vectorstore.get()
+
+            if not collection or "metadatas" not in collection or not collection["metadatas"]:
+                logger.debug("No documents in collection")
+                return []
+
+            # ファイル名ごとにタグを集約
+            docs_dict = {}
+            for metadata in collection["metadatas"]:
+                if metadata and "source_file" in metadata:
+                    filename = metadata["source_file"]
+                    tags_str = metadata.get("tags", "")
+                    tags = [t.strip() for t in tags_str.split(",") if t.strip()] if tags_str else []
+
+                    if filename not in docs_dict:
+                        docs_dict[filename] = set()
+
+                    # タグを追加（重複を避けるためset使用）
+                    for tag in tags:
+                        docs_dict[filename].add(tag)
+
+            # 辞書をリストに変換
+            result = [
+                {
+                    "filename": filename,
+                    "tags": sorted(list(tags))
+                }
+                for filename, tags in docs_dict.items()
+            ]
+
+            # ファイル名でソート
+            result.sort(key=lambda x: x["filename"])
+
+            logger.info("Documents with tags: %s", result)
+            return result
+
+        except Exception as e:
+            logger.error("Error in list_documents_with_tags: %s", e)
             return []
 
     def delete_document(self, filename: str) -> bool:

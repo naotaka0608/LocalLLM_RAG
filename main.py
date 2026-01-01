@@ -254,6 +254,18 @@ async def list_tags():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/documents/details")
+async def list_documents_with_tags():
+    """
+    登録されているドキュメントとそのタグの詳細情報を取得
+    """
+    try:
+        docs = rag_service.list_documents_with_tags()
+        return {"documents": docs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.delete("/documents/{filename}")
 async def delete_document(filename: str):
     """

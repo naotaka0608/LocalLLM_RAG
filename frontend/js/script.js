@@ -438,7 +438,14 @@ function setupDragAndDrop() {
 
         const files = e.dataTransfer.files;
         if (files.length > 0) {
-            await handleFileUpload(files);
+            // タグ入力欄から値を取得
+            const tagInput = document.getElementById('uploadTagInput');
+            const tags = tagInput ? tagInput.value.trim() : '';
+            await handleFileUpload(files, tags);
+            // アップロード後、タグ入力欄をクリア
+            if (tagInput) {
+                tagInput.value = '';
+            }
         }
     });
 }
@@ -466,10 +473,13 @@ async function checkHealth() {
 // ドキュメント一覧の読み込み
 async function loadDocuments() {
     try {
-        const response = await fetch(`${API_BASE_URL}/documents`);
+        // タグ情報付きのドキュメント詳細を取得
+        const response = await fetch(`${API_BASE_URL}/documents/details`);
         const data = await response.json();
         const listElement = document.getElementById('documentList');
         const countElement = document.getElementById('documentCount');
+
+        console.log('[DEBUG] Documents with tags:', data.documents);
 
         // 件数を更新
         countElement.textContent = `(${data.documents.length}件)`;
@@ -478,12 +488,27 @@ async function loadDocuments() {
             listElement.innerHTML = '<li style="text-align: center; color: #999;">ドキュメントなし</li>';
         } else {
             listElement.innerHTML = data.documents
-                .map(doc => `
-                    <li class="document-item" style="display: flex; justify-content: space-between; align-items: center;">
-                        <span>${doc}</span>
-                        <button onclick="deleteDocument('${doc}')" style="padding: 4px 8px; background: #f44336; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8rem;">削除</button>
-                    </li>
-                `)
+                .map(doc => {
+                    // タグの表示文字列を作成
+                    let tagsHTML = '';
+                    if (doc.tags && doc.tags.length > 0) {
+                        tagsHTML = `<div style="margin-top: 4px; font-size: 0.75rem;">
+                            ${doc.tags.map(tag => `<span style="background: #e3f2fd; color: #1976d2; padding: 2px 6px; border-radius: 3px; margin-right: 4px;">${tag}</span>`).join('')}
+                        </div>`;
+                    } else {
+                        tagsHTML = `<div style="margin-top: 4px; font-size: 0.75rem; color: #999;">タグなし</div>`;
+                    }
+
+                    return `
+                        <li class="document-item" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0;">
+                            <div style="flex: 1;">
+                                <div>${doc.filename}</div>
+                                ${tagsHTML}
+                            </div>
+                            <button onclick="deleteDocument('${doc.filename}')" style="padding: 4px 8px; background: #f44336; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8rem;">削除</button>
+                        </li>
+                    `;
+                })
                 .join('');
         }
     } catch (error) {
@@ -793,9 +818,12 @@ async function sendQuestion() {
         }
 
         // タグフィルタを追加
+        console.log('[DEBUG] selectedTags:', selectedTags);
         if (selectedTags && selectedTags.length > 0) {
             requestBody.tags = selectedTags;
-            console.log('[DEBUG] Tag filter:', selectedTags);
+            console.log('[DEBUG] Tag filter applied:', selectedTags);
+        } else {
+            console.log('[DEBUG] No tag filter (showing all documents)');
         }
 
         const response = await fetch(`${API_BASE_URL}/query/stream`, {
