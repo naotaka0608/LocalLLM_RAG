@@ -68,6 +68,18 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- タグフィルタエリア -->
+                    <div id="tagFilterArea" style="display: none; margin-bottom: 12px; padding: 10px; background: #f9f9f9; border-radius: 8px; border: 1px solid #e0e0e0;">
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <span style="font-size: 0.85rem; color: #666; font-weight: 600;">🏷️ フィルタ:</span>
+                            <div id="tagFilterButtons" style="display: flex; flex-wrap: wrap; gap: 6px; flex: 1;"></div>
+                            <button onclick="clearTagFilter()" style="padding: 4px 10px; background: #ff5722; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.75rem;">
+                                ✕ クリア
+                            </button>
+                        </div>
+                    </div>
+
                     <div class="input-area">
                         <input
                             type="text"
@@ -631,6 +643,25 @@
                         <p>クリックまたはドラッグ＆ドロップ</p>
                         <p style="font-size: 0.85rem; color: #666; margin-top: 5px;">対応: PDF, TXT, MD, CSV</p>
                         <input type="file" id="fileInput" accept=".pdf,.txt,.md,.csv" multiple onchange="uploadFiles()">
+                    </div>
+
+                    <!-- タグ設定エリア -->
+                    <div style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-radius: 8px; border: 1px solid #e0e0e0;">
+                        <label style="font-size: 0.9rem; color: #333; display: block; margin-bottom: 8px; font-weight: 600;">
+                            🏷️ タグ（オプション）
+                        </label>
+                        <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                            <input type="text" id="uploadTagInput" placeholder="例: 商品A, マニュアル"
+                                   style="flex: 1; padding: 8px; border: 2px solid #e0e0e0; border-radius: 5px; font-size: 0.9rem;">
+                        </div>
+                        <div style="font-size: 0.75rem; color: #666; margin-bottom: 8px;">
+                            複数のタグはカンマ区切りで入力してください
+                        </div>
+                        <!-- 既存タグからの選択 -->
+                        <div id="existingTagsArea" style="display: none; margin-top: 10px;">
+                            <div style="font-size: 0.85rem; color: #666; margin-bottom: 5px;">既存のタグから選択:</div>
+                            <div id="existingTagsList" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
+                        </div>
                     </div>
                 </div>
 

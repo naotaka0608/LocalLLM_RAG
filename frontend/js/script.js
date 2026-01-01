@@ -593,19 +593,27 @@ function showNotification(message, type = 'info') {
 // ファイルアップロード（input要素から）
 async function uploadFiles() {
     const fileInput = document.getElementById('fileInput');
+    const tagInput = document.getElementById('uploadTagInput');
     const files = fileInput.files;
 
     if (files.length === 0) return;
 
-    await handleFileUpload(files);
+    const tags = tagInput.value.trim();
+    await handleFileUpload(files, tags);
     fileInput.value = '';
+    tagInput.value = '';  // タグ入力欄もクリア
 }
 
 // ファイルアップロード処理（共通）
-async function handleFileUpload(files) {
+async function handleFileUpload(files, tags = '') {
     const formData = new FormData();
     for (let file of files) {
         formData.append('files', file);
+    }
+
+    // タグを追加
+    if (tags) {
+        formData.append('tags', tags);
     }
 
     // アップロードエリアにローディング表示
@@ -630,8 +638,10 @@ async function handleFileUpload(files) {
         const data = await response.json();
 
         if (response.ok) {
-            showNotification(`アップロード完了: ${data.files.join(', ')}`, 'success');
+            const tagMsg = data.tags && data.tags.length > 0 ? `\nタグ: ${data.tags.join(', ')}` : '';
+            showNotification(`アップロード完了: ${data.files.join(', ')}${tagMsg}`, 'success');
             await loadDocuments();
+            await loadTags();  // タグリストを再読み込み
         } else {
             showNotification(`エラー: ${data.detail}`, 'error');
         }
@@ -782,6 +792,12 @@ async function sendQuestion() {
             requestBody.system_prompt = systemPrompt;
         }
 
+        // タグフィルタを追加
+        if (selectedTags && selectedTags.length > 0) {
+            requestBody.tags = selectedTags;
+            console.log('[DEBUG] Tag filter:', selectedTags);
+        }
+
         const response = await fetch(`${API_BASE_URL}/query/stream`, {
             method: 'POST',
             headers: {
@@ -817,6 +833,11 @@ async function sendQuestion() {
         let sourcesData = null;
         let sourceScores = null;
 
+        // 品質スコア情報を保存する変数
+        let qualityScore = 0;
+        let documentCount = 0;
+        let maxSimilarity = 0;
+
         console.log('[DEBUG] Starting to read streaming response');
         while (true) {
             const { done, value } = await reader.read();
@@ -839,6 +860,12 @@ async function sendQuestion() {
                             const sourceInfo = JSON.parse(jsonStr);
                             sourcesData = sourceInfo.sources;
                             sourceScores = sourceInfo.source_scores;
+
+                            // 品質スコア情報を保存
+                            qualityScore = sourceInfo.quality_score || 0;
+                            documentCount = sourceInfo.document_count || 0;
+                            maxSimilarity = sourceInfo.max_similarity || 0;
+
                             // 参照元情報は回答に含めない
                             continue;
                         } catch (e) {
@@ -912,6 +939,42 @@ async function sendQuestion() {
             speedDisplay.textContent = `✓ 完了: 応答時間: ${responseTime}秒 | 生成時間: ${generationTime}秒 | 速度: ${avgSpeed} 文字/秒`;
             speedDisplay.style.background = '#e8f5e9';
             speedDisplay.style.color = '#2e7d32';
+        }
+
+        // 品質スコアを表示（RAG使用時のみ）
+        if (useRag && qualityScore > 0) {
+            const qualityScoreDiv = document.createElement('div');
+            qualityScoreDiv.style.cssText = 'margin-top: 10px; margin-bottom: 8px; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; color: white; font-size: 0.85rem; box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);';
+
+            // スコアに応じた星の数を計算（5段階）
+            const stars = Math.round(qualityScore / 20);
+            const starDisplay = '★'.repeat(stars) + '☆'.repeat(5 - stars);
+
+            qualityScoreDiv.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="font-size: 1.2rem;">📊</span>
+                        <strong>信頼度:</strong>
+                        <span style="font-size: 1.1rem; letter-spacing: 2px;">${starDisplay}</span>
+                        <span style="opacity: 0.9;">(${qualityScore}%)</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px; opacity: 0.9;">
+                        <span>📄</span>
+                        <span>${documentCount}件の文書から生成</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px; opacity: 0.9;">
+                        <span>🎯</span>
+                        <span>最高類似度: ${(maxSimilarity * 100).toFixed(0)}%</span>
+                    </div>
+                </div>
+            `;
+
+            // 速度表示の後に挿入
+            if (speedDisplay && speedDisplay.parentNode) {
+                speedDisplay.parentNode.insertBefore(qualityScoreDiv, speedDisplay.nextSibling);
+            } else {
+                contentDiv.appendChild(qualityScoreDiv);
+            }
         }
 
         // コピーボタンと再生成ボタンを追加
@@ -1813,3 +1876,100 @@ function saveCustomCharacterPrompt() {
     performanceSettings.customCharacterPrompt = customPrompt;
     savePerformanceSettings();
 }
+
+// ========================================
+// タグ機能
+// ========================================
+
+// 選択中のタグフィルタ
+let selectedTags = [];
+
+// タグ一覧を取得して表示
+async function loadTags() {
+    try {
+        const response = await fetch('/tags');
+        const data = await response.json();
+        const tags = data.tags || [];
+
+        // アップロード画面の既存タグリスト
+        const existingTagsArea = document.getElementById('existingTagsArea');
+        const existingTagsList = document.getElementById('existingTagsList');
+
+        if (tags.length > 0) {
+            existingTagsArea.style.display = 'block';
+            existingTagsList.innerHTML = tags.map(tag =>
+                `<button onclick="addTagToInput('${tag}')" style="padding: 4px 10px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
+                    ${tag}
+                </button>`
+            ).join('');
+        } else {
+            existingTagsArea.style.display = 'none';
+        }
+
+        // チャット画面のタグフィルタボタン
+        updateTagFilterUI(tags);
+
+    } catch (error) {
+        console.error('Failed to load tags:', error);
+    }
+}
+
+// タグフィルタUIを更新
+function updateTagFilterUI(tags) {
+    const tagFilterArea = document.getElementById('tagFilterArea');
+    const tagFilterButtons = document.getElementById('tagFilterButtons');
+
+    if (tags.length > 0) {
+        tagFilterArea.style.display = 'block';
+        tagFilterButtons.innerHTML = tags.map(tag => {
+            const isSelected = selectedTags.includes(tag);
+            return `<button onclick="toggleTagFilter('${tag}')" style="padding: 4px 10px; background: ${isSelected ? '#764ba2' : '#667eea'}; color: white; border: ${isSelected ? '2px solid #4a148c' : 'none'}; border-radius: 4px; cursor: pointer; font-size: 0.8rem; font-weight: ${isSelected ? 'bold' : 'normal'};">
+                ${isSelected ? '✓ ' : ''}${tag}
+            </button>`;
+        }).join('');
+    } else {
+        tagFilterArea.style.display = 'none';
+    }
+}
+
+// タグを入力欄に追加
+function addTagToInput(tag) {
+    const input = document.getElementById('uploadTagInput');
+    const currentValue = input.value.trim();
+
+    if (currentValue) {
+        // 既存の値がある場合はカンマで追加
+        const existingTags = currentValue.split(',').map(t => t.trim());
+        if (!existingTags.includes(tag)) {
+            input.value = currentValue + ', ' + tag;
+        }
+    } else {
+        input.value = tag;
+    }
+}
+
+// タグフィルタの切り替え
+function toggleTagFilter(tag) {
+    const index = selectedTags.indexOf(tag);
+    if (index > -1) {
+        selectedTags.splice(index, 1);
+    } else {
+        selectedTags.push(tag);
+    }
+
+    // UIを更新
+    loadTags();
+
+    console.log('[DEBUG] Selected tags:', selectedTags);
+}
+
+// タグフィルタをクリア
+function clearTagFilter() {
+    selectedTags = [];
+    loadTags();
+}
+
+// ページ読み込み時にタグを読み込む
+document.addEventListener('DOMContentLoaded', function() {
+    loadTags();
+});

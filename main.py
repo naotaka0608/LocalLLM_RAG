@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
@@ -39,6 +39,7 @@ class QueryRequest(BaseModel):
     use_hybrid_search: bool = True  # ハイブリッド検索のON/OFF
     chat_history: Optional[List[Message]] = None  # 会話履歴
     system_prompt: Optional[str] = None  # システムプロンプト（キャラクター設定）
+    tags: Optional[List[str]] = None  # タグフィルタ
     # 主要パラメータ (★)
     temperature: Optional[float] = None
     document_count: Optional[int] = None
@@ -88,14 +89,23 @@ async def read_root():
 
 
 @app.post("/upload")
-async def upload_documents(files: List[UploadFile] = File(...)):
+async def upload_documents(
+    files: List[UploadFile] = File(...),
+    tags: Optional[str] = Form(None)  # カンマ区切りのタグ文字列
+):
     """
     ファイルをアップロードしてベクトルストアに追加
     対応フォーマット: PDF, TXT, MD, CSV
+    タグを指定することで、ドキュメントを分類できます
     """
     try:
         # サポートされている拡張子
         SUPPORTED_EXTENSIONS = {'.pdf', '.txt', '.md', '.csv'}
+
+        # タグをリストに変換
+        tag_list = []
+        if tags:
+            tag_list = [tag.strip() for tag in tags.split(',') if tag.strip()]
 
         uploaded_files = []
         for file in files:
@@ -115,13 +125,14 @@ async def upload_documents(files: List[UploadFile] = File(...)):
                 content = await file.read()
                 f.write(content)
 
-            # ベクトルストアに追加
-            rag_service.add_documents(file_path)
+            # ベクトルストアに追加（タグ付き）
+            rag_service.add_documents(file_path, tags=tag_list)
             uploaded_files.append(file.filename)
 
         return {
             "message": "Documents uploaded successfully",
-            "files": uploaded_files
+            "files": uploaded_files,
+            "tags": tag_list
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -187,6 +198,7 @@ async def query_stream(request: QueryRequest):
                 use_hybrid_search=request.use_hybrid_search,
                 chat_history=chat_history,
                 system_prompt=request.system_prompt,
+                tags=request.tags,  # タグフィルタを追加
                 temperature=request.temperature,
                 k=request.document_count,
                 search_multiplier=request.search_multiplier,
@@ -226,6 +238,18 @@ async def list_documents():
     try:
         docs = rag_service.list_documents()
         return {"documents": docs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/tags")
+async def list_tags():
+    """
+    登録されているタグの一覧を取得
+    """
+    try:
+        tags = rag_service.list_tags()
+        return {"tags": tags}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
