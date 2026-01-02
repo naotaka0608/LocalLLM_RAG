@@ -22,7 +22,10 @@
       "Bash(pip install:*)",
       "Bash(.venv/Scripts/python.exe:*)",
       "Bash(dir:*)",
-      "Bash(sqlite3:*)"
+      "Bash(sqlite3:*)",
+      "Bash(npm create:*)",
+      "Bash(npx sv create frontend-svelte --template minimal --types ts --no-add-ons)",
+      "Bash(npm install:*)"
     ]
   }
 }
