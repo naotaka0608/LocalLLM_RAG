@@ -26,7 +26,13 @@
       "Bash(npm create:*)",
       "Bash(npx sv create frontend-svelte --template minimal --types ts --no-add-ons)",
       "Bash(npm install:*)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Bash(.venvScriptspython.exe -m py_compile rag_service.py)",
+      "Bash(timeout 3 bash:*)",
+      "Bash(.....venvScriptspython.exe -m http.server 8080)",
+      "Bash(.venvScriptspython.exe test_character_api.py)",
+      "Bash(timeout:*)",
+      "Bash(../.venv/Scripts/python.exe:*)"
     ]
   }
 }

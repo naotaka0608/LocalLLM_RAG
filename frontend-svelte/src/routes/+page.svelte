@@ -106,39 +106,32 @@
 				requestParams.tags = settings.tags;
 			}
 
-			console.log('[DEBUG] Request parameters:', requestParams);
-
 			// APIからストリーミングレスポンスを取得
 			const stream = await sendQuestionStream(
 				userQuestion,
 				requestParams,
 				abortController?.signal
 			);
-			console.log('[DEBUG] Stream received');
 
 			// ストリーミングを処理
 			await processStream(
 				stream,
 				(chunk) => {
 					// メッセージを追加
-					console.log('[DEBUG] Received chunk:', chunk);
 					currentStreamingMessage += chunk;
 
 					// 最後のメッセージを更新
 					if (chatId) {
-						console.log('[DEBUG] Updating message, total length:', currentStreamingMessage.length);
 						chatStore.updateLastMessage(chatId, currentStreamingMessage);
 					}
 				},
 				() => {
 					// ストリーミング完了
-					console.log('[DEBUG] Streaming completed');
 					isGenerating = false;
 					currentStreamingMessage = '';
 				},
 				(sources, qualityScore) => {
 					// ソース情報を受信
-					console.log('[DEBUG] Received sources:', sources, 'Quality score:', qualityScore);
 					if (chatId) {
 						chatStore.updateLastMessageSources(chatId, sources, qualityScore);
 					}

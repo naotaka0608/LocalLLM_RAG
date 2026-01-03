@@ -543,6 +543,70 @@ class RAGService:
 
         return answer, list(set(sources)), source_scores
 
+    async def _stream_ollama_chat(self, system_message: str, user_message: str, model_name: str = None, **llm_params):
+        """
+        Ollama Chat APIを使用してストリーミング（systemロールをサポート）
+        """
+        if model_name is None or model_name == '':
+            model_name = self.model_name
+            logger.info(f"Model name not provided, using default: {model_name}")
+
+        logger.info(f"[STREAM] Starting Ollama chat stream with model: {model_name}")
+
+        # パラメータを準備
+        options = {}
+        param_mapping = {
+            'temperature': 'temperature',
+            'top_p': 'top_p',
+            'top_k': 'top_k',
+            'repeat_penalty': 'repeat_penalty',
+            'num_predict': 'num_predict',
+            'num_ctx': 'num_ctx',
+            'seed': 'seed',
+            'mirostat': 'mirostat',
+            'mirostat_tau': 'mirostat_tau',
+            'mirostat_eta': 'mirostat_eta',
+            'tfs_z': 'tfs_z'
+        }
+
+        for param_key, ollama_key in param_mapping.items():
+            if param_key in llm_params and llm_params[param_key] is not None:
+                options[ollama_key] = llm_params[param_key]
+
+        # Chat API用のメッセージ形式
+        messages = []
+        if system_message:
+            messages.append({"role": "system", "content": system_message})
+        messages.append({"role": "user", "content": user_message})
+
+        payload = {
+            "model": model_name,
+            "messages": messages,
+            "stream": True,
+            "options": options
+        }
+
+        logger.debug(f"[STREAM] Using chat API with system message")
+
+        try:
+            async with httpx.AsyncClient(timeout=300.0) as client:
+                async with client.stream('POST', 'http://localhost:11434/api/chat', json=payload) as response:
+                    logger.info(f"[STREAM] Response status: {response.status_code}")
+                    chunk_count = 0
+                    async for line in response.aiter_lines():
+                        if line:
+                            try:
+                                data = json.loads(line)
+                                if 'message' in data and 'content' in data['message']:
+                                    chunk_count += 1
+                                    yield data['message']['content']
+                            except json.JSONDecodeError:
+                                continue
+                    logger.info(f"[STREAM] Completed. Total chunks: {chunk_count}")
+        except Exception as e:
+            logger.error(f"[STREAM] Error during streaming: {e}")
+            raise
+
     async def _stream_ollama_direct(self, prompt: str, model_name: str = None, **llm_params):
         """
         Ollama APIを直接呼び出してリアルタイムストリーミング
@@ -691,11 +755,13 @@ class RAGService:
 
             simple_prompt = f"""{system_role}
 
-重要: 絶対にこのキャラクターの口調で話してください。丁寧語（「承知いたしました」「でございます」など）は禁止です。
 {example}
+---
+【重要】絶対に上記の例と同じ口調・語尾で回答してください。丁寧語は使用禁止です。
+
 質問: {question}
 
-回答:"""
+回答（例と同じ口調で）:"""
 
             async for chunk in self._stream_ollama_direct(simple_prompt, model_name, **llm_params):
                 yield chunk
@@ -792,11 +858,13 @@ class RAGService:
 
             simple_prompt = f"""{system_role}
 
-重要: 絶対にこのキャラクターの口調で話してください。丁寧語（「承知いたしました」「でございます」など）は禁止です。
 {example}
+---
+【重要】絶対に上記の例と同じ口調・語尾で回答してください。丁寧語は使用禁止です。
+
 質問: {question}
 
-回答:"""
+回答（例と同じ口調で）:"""
             async for chunk in self._stream_ollama_direct(simple_prompt, model_name, **llm_params):
                 yield chunk
             return
@@ -828,99 +896,27 @@ class RAGService:
         # コンテキストの構築
         context = "\n\n".join([doc.page_content for doc, _score in top_docs_with_scores])
 
-        # システムプロンプトの設定
-        system_role = system_prompt if system_prompt else "あなたは親切で知識豊富なアシスタントです。"
-        logger.info(f"System prompt received: {system_prompt}")
-        logger.info(f"Using system role: {system_role[:100]}...")
-
-        # 会話履歴を含めたプロンプトの構築
-        if chat_history and len(chat_history) > 0:
-            # 会話履歴を文字列に変換
-            history_text = "\n".join([
-                f"{'ユーザー' if msg['role'] == 'user' else 'アシスタント'}: {msg['content']}"
-                for msg in chat_history[-10:]  # 最新10件のみ使用
-            ])
-
-            # Few-shot例を追加
-            example = ""
-            if "ギャル" in system_role or "gyaru" in system_role.lower():
-                example = """
-例:
-質問: この商品の特徴は？
-回答: マジでヤバいよね！この商品、超便利なんだよね～♪ 使いやすさがハンパないし、デザインもめっちゃオシャレ☆
-
-"""
-            elif "侍" in system_role or "samurai" in system_role.lower():
-                example = """
-例:
-質問: この商品の特徴は？
-回答: 左様でござる。この商品の特徴について申し上げよう。使い勝手が良く、誠に優れた品でござる。
-
-"""
-            elif "先生" in system_role or "teacher" in system_role.lower():
-                example = """
-例:
-質問: この商品の特徴は？
-回答: はい、良い質問ですね。この商品には3つの大きな特徴があります。まず1つ目は...
-
-"""
-
-            prompt_text = f"""{system_role}
-
-重要: 絶対にこのキャラクターの口調で話してください。丁寧語（「承知いたしました」「でございます」など）は禁止です。
-{example}
-以下は過去の会話履歴です：
-{history_text}
+        # システムプロンプトがある場合はプロンプトをカスタマイズ
+        if system_prompt:
+            # カスタムプロンプトテンプレートを使用（キャラクター指示を参照情報の後に配置）
+            custom_prompt_template = f"""以下の参照情報を使って、質問に答えてください。
 
 参照情報:
-{context}
+{{context}}
 
-質問: {question}
+質問: {{question}}
+
+{system_prompt}
+
+上記の指示に従って回答してください。
 
 回答:"""
+            prompt_text = custom_prompt_template.format(context=context, question=question)
         else:
-            # 会話履歴がない場合
-            if system_prompt:
-                # システムプロンプトがある場合はカスタマイズしたプロンプトを使用
-                # ギャル用のFew-shot例を追加
-                example = ""
-                if "ギャル" in system_role or "gyaru" in system_role.lower():
-                    example = """
-例:
-質問: この商品の特徴は？
-回答: マジでヤバいよね！この商品、超便利なんだよね～♪ 使いやすさがハンパないし、デザインもめっちゃオシャレ☆
+            # デフォルトのプロンプトを使用
+            prompt_text = self.prompt.format(context=context, question=question)
 
-"""
-                elif "侍" in system_role or "samurai" in system_role.lower():
-                    example = """
-例:
-質問: この商品の特徴は？
-回答: 左様でござる。この商品の特徴について申し上げよう。使い勝手が良く、誠に優れた品でござる。
-
-"""
-                elif "先生" in system_role or "teacher" in system_role.lower():
-                    example = """
-例:
-質問: この商品の特徴は？
-回答: はい、良い質問ですね。この商品には3つの大きな特徴があります。まず1つ目は...
-
-"""
-
-                prompt_text = f"""{system_role}
-
-重要: 絶対にこのキャラクターの口調で話してください。丁寧語（「承知いたしました」「でございます」など）は禁止です。
-{example}
-参照情報:
-{context}
-
-質問: {question}
-
-回答:"""
-            else:
-                # 従来通りのプロンプト
-                prompt_text = self.prompt.format(context=context, question=question)
-
-        # ストリーミング生成
+        logger.info(f"Final prompt being sent to LLM:\n{prompt_text[:500]}...")
         async for chunk in self._stream_ollama_direct(prompt_text, model_name, **llm_params):
             yield chunk
 
