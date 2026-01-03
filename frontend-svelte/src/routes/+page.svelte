@@ -10,10 +10,15 @@
 	import ModelSettingsPanel from '$lib/components/ModelSettingsPanel.svelte';
 	import DocumentManager from '$lib/components/DocumentManager.svelte';
 
-	let inputMessage = '';
-	let isGenerating = false;
-	let currentStreamingMessage = '';
-	let abortController: AbortController | null = null;
+	let inputMessage = $state('');
+	let isGenerating = $state(false);
+	let currentStreamingMessage = $state('');
+	let abortController: AbortController | null = $state(null);
+
+	// 速度情報
+	let currentResponseTime = $state(0);
+	let currentGenerationTime = $state(0);
+	let currentSpeed = $state(0);
 
 	// 現在のチャットのメッセージ
 	let messages = $derived($currentChat?.messages || []);
@@ -45,6 +50,11 @@
 	// チャットを削除
 	function handleDeleteChat(deleteChatId: string) {
 		chatStore.deleteChat(deleteChatId);
+	}
+
+	// チャット名を変更
+	function handleRenameChat(renameChatId: string, newTitle: string) {
+		chatStore.renameChat(renameChatId, newTitle);
 	}
 
 	function stopGeneration() {
@@ -129,12 +139,28 @@
 					// ストリーミング完了
 					isGenerating = false;
 					currentStreamingMessage = '';
+
+					// 最終的な速度情報をメッセージに保存
+					if (chatId) {
+						chatStore.updateLastMessageSpeed(
+							chatId,
+							currentResponseTime,
+							currentGenerationTime,
+							currentSpeed
+						);
+					}
 				},
 				(sources, qualityScore) => {
 					// ソース情報を受信
 					if (chatId) {
 						chatStore.updateLastMessageSources(chatId, sources, qualityScore);
 					}
+				},
+				(responseTime, generationTime, speed) => {
+					// 速度情報を更新
+					currentResponseTime = responseTime;
+					currentGenerationTime = generationTime;
+					currentSpeed = speed;
 				}
 			);
 		} catch (error: any) {
@@ -172,6 +198,7 @@
 		onNewChat={handleNewChat}
 		onSelectChat={handleSelectChat}
 		onDeleteChat={handleDeleteChat}
+		onRenameChat={handleRenameChat}
 	/>
 
 	<div class="main-content">
@@ -216,10 +243,26 @@
 							{message.content}
 						{:else if index === messages.length - 1 && isGenerating}
 							<!-- 生成中のメッセージ -->
+							<!-- 速度情報（生成中） -->
+							{#if currentResponseTime > 0}
+								<div class="speed-info generating">
+									応答時間: {currentResponseTime.toFixed(1)}秒 | 生成中: {currentGenerationTime.toFixed(
+										1
+									)}秒 ({currentSpeed.toFixed(1)} 文字/秒)
+								</div>
+							{/if}
 							<MarkdownRenderer content={message.content} />
 							<span class="cursor">▊</span>
 						{:else}
 							<!-- アシスタントメッセージはマークダウン表示 -->
+							<!-- 速度情報（完了） -->
+							{#if message.responseTime && message.generationTime && message.speed}
+								<div class="speed-info completed">
+									✓ 完了: 応答時間: {message.responseTime.toFixed(1)}秒 | 生成時間: {message.generationTime.toFixed(
+										1
+									)}秒 | 速度: {message.speed.toFixed(1)} 文字/秒
+								</div>
+							{/if}
 							<MarkdownRenderer content={message.content} />
 							<!-- ソース情報を表示 -->
 							{#if message.sources && message.sources.length > 0}
@@ -628,5 +671,24 @@
 
 	.btn-stop:hover:not(:disabled) {
 		background: #e64a19 !important;
+	}
+
+	/* 速度情報表示 */
+	.speed-info {
+		font-size: 0.75rem;
+		margin-bottom: 8px;
+		padding: 4px 8px;
+		border-radius: 4px;
+		display: inline-block;
+	}
+
+	.speed-info.generating {
+		background: #f0f0f0;
+		color: #999;
+	}
+
+	.speed-info.completed {
+		background: #e8f5e9;
+		color: #2e7d32;
 	}
 </style>
