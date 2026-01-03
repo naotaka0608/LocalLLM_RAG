@@ -547,8 +547,12 @@ class RAGService:
         """
         Ollama APIを直接呼び出してリアルタイムストリーミング
         """
-        if model_name is None:
+        if model_name is None or model_name == '':
             model_name = self.model_name
+            logger.info(f"Model name not provided, using default: {model_name}")
+
+        logger.info(f"[STREAM] Starting Ollama stream with model: {model_name}")
+        logger.debug(f"[STREAM] Prompt length: {len(prompt)} characters")
 
         # パラメータを準備（Noneでないもののみ）
         options = {}
@@ -577,16 +581,28 @@ class RAGService:
             "options": options
         }
 
-        async with httpx.AsyncClient(timeout=300.0) as client:
-            async with client.stream('POST', 'http://localhost:11434/api/generate', json=payload) as response:
-                async for line in response.aiter_lines():
-                    if line:
-                        try:
-                            data = json.loads(line)
-                            if 'response' in data:
-                                yield data['response']
-                        except json.JSONDecodeError:
-                            continue
+        logger.debug(f"[STREAM] Payload options: {options}")
+
+        try:
+            async with httpx.AsyncClient(timeout=300.0) as client:
+                async with client.stream('POST', 'http://localhost:11434/api/generate', json=payload) as response:
+                    logger.info(f"[STREAM] Response status: {response.status_code}")
+                    chunk_count = 0
+                    async for line in response.aiter_lines():
+                        if line:
+                            try:
+                                data = json.loads(line)
+                                if 'response' in data:
+                                    chunk_count += 1
+                                    if chunk_count % 10 == 0:  # 10チャンクごとにログ
+                                        logger.debug(f"[STREAM] Streamed {chunk_count} chunks so far")
+                                    yield data['response']
+                            except json.JSONDecodeError:
+                                continue
+                    logger.info(f"[STREAM] Completed. Total chunks: {chunk_count}")
+        except Exception as e:
+            logger.error(f"[STREAM] Error during streaming: {e}")
+            raise
 
     async def query_stream(self, question: str, k: int = 5, search_multiplier: int = 10, model_name: str = None, use_rag: bool = True, enable_query_expansion: bool = False,
                           use_hybrid_search: bool = True, chat_history: list = None, system_prompt: str = None, tags: list = None, temperature: float = None, top_p: float = None, repeat_penalty: float = None,

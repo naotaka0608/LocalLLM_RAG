@@ -25,7 +25,8 @@
       "Bash(sqlite3:*)",
       "Bash(npm create:*)",
       "Bash(npx sv create frontend-svelte --template minimal --types ts --no-add-ons)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(npm run dev:*)"
     ]
   }
 }

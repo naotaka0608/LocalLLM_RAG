@@ -7,6 +7,7 @@
 	import MarkdownRenderer from '$lib/components/MarkdownRenderer.svelte';
 	import SourceDisplay from '$lib/components/SourceDisplay.svelte';
 	import SettingsPanel from '$lib/components/SettingsPanel.svelte';
+	import ModelSettingsPanel from '$lib/components/ModelSettingsPanel.svelte';
 	import DocumentManager from '$lib/components/DocumentManager.svelte';
 
 	let inputMessage = '';
@@ -65,6 +66,7 @@
 
 		// ユーザーメッセージを追加
 		const userQuestion = inputMessage;
+		console.log('[DEBUG] Sending question:', userQuestion);
 		chatStore.addMessage(chatId, { role: 'user', content: userQuestion });
 		inputMessage = '';
 		isGenerating = true;
@@ -80,45 +82,63 @@
 			// 設定を取得
 			const settings = $settingsStore;
 
+			// APIリクエストパラメータを構築（空の値は送信しない）
+			const requestParams: any = {
+				use_rag: settings.use_rag,
+				use_hybrid_search: settings.use_hybrid_search,
+				query_expansion: settings.query_expansion,
+				temperature: settings.temperature,
+				top_p: settings.top_p,
+				repeat_penalty: settings.repeat_penalty,
+				num_predict: settings.num_predict,
+				document_count: settings.document_count,
+				search_multiplier: settings.search_multiplier
+			};
+
+			// オプショナルなパラメータ（値がある場合のみ追加）
+			if (settings.model && settings.model.trim()) {
+				requestParams.model = settings.model;
+			}
+			if (settings.system_prompt && settings.system_prompt.trim()) {
+				requestParams.system_prompt = settings.system_prompt;
+			}
+			if (settings.tags && settings.tags.length > 0) {
+				requestParams.tags = settings.tags;
+			}
+
+			console.log('[DEBUG] Request parameters:', requestParams);
+
 			// APIからストリーミングレスポンスを取得
 			const stream = await sendQuestionStream(
 				userQuestion,
-				{
-					model: settings.model,
-					use_rag: settings.use_rag,
-					use_hybrid_search: settings.use_hybrid_search,
-					query_expansion: settings.query_expansion,
-					temperature: settings.temperature,
-					top_p: settings.top_p,
-					repeat_penalty: settings.repeat_penalty,
-					num_predict: settings.num_predict,
-					document_count: settings.document_count,
-					search_multiplier: settings.search_multiplier,
-					system_prompt: settings.system_prompt || undefined,
-					tags: settings.tags.length > 0 ? settings.tags : undefined
-				},
+				requestParams,
 				abortController?.signal
 			);
+			console.log('[DEBUG] Stream received');
 
 			// ストリーミングを処理
 			await processStream(
 				stream,
 				(chunk) => {
 					// メッセージを追加
+					console.log('[DEBUG] Received chunk:', chunk);
 					currentStreamingMessage += chunk;
 
 					// 最後のメッセージを更新
 					if (chatId) {
+						console.log('[DEBUG] Updating message, total length:', currentStreamingMessage.length);
 						chatStore.updateLastMessage(chatId, currentStreamingMessage);
 					}
 				},
 				() => {
 					// ストリーミング完了
+					console.log('[DEBUG] Streaming completed');
 					isGenerating = false;
 					currentStreamingMessage = '';
 				},
 				(sources, qualityScore) => {
 					// ソース情報を受信
+					console.log('[DEBUG] Received sources:', sources, 'Quality score:', qualityScore);
 					if (chatId) {
 						chatStore.updateLastMessageSources(chatId, sources, qualityScore);
 					}
@@ -170,6 +190,7 @@
 				</div>
 				<div class="header-buttons">
 					<DocumentManager />
+					<ModelSettingsPanel />
 					<SettingsPanel />
 				</div>
 			</div>
