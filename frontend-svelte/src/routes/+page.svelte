@@ -16,12 +16,12 @@
 	let abortController: AbortController | null = null;
 
 	// 現在のチャットのメッセージ
-	$: messages = $currentChat?.messages || [];
-	$: chatId = $currentChat?.id || null;
+	let messages = $derived($currentChat?.messages || []);
+	let chatId = $derived($currentChat?.id || null);
 
 	// テーマとフォントサイズを適用
-	$: theme = $settingsStore.theme;
-	$: fontSize = $settingsStore.fontSize;
+	let theme = $derived($settingsStore.theme);
+	let fontSize = $derived($settingsStore.fontSize);
 
 	// 初回読み込み時に新しいチャットを作成
 	onMount(() => {
@@ -260,13 +260,6 @@
 </div>
 
 <style>
-	:global(body) {
-		margin: 0;
-		padding: 0;
-		font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-		background: #f5f5f5;
-	}
-
 	.app-layout {
 		display: flex;
 		height: 100vh;
@@ -292,6 +285,10 @@
 		color: #e0e0e0;
 	}
 
+	.theme-dark .message.user {
+		background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+	}
+
 	.theme-dark .chat-input {
 		background: #2d2d2d;
 		border-top-color: #444;
@@ -303,22 +300,95 @@
 		border-color: #555;
 	}
 
-	/* ブルーテーマ */
-	.theme-blue .chat-header {
-		background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+	.theme-dark .chat-input input::placeholder {
+		color: #888;
 	}
 
-	.theme-blue .message.user {
-		background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+	.theme-dark .tag-filter-area {
+		background: #2d2d2d;
+		border-bottom-color: #444;
 	}
 
-	/* グリーンテーマ */
-	.theme-green .chat-header {
-		background: linear-gradient(135deg, #065f46 0%, #10b981 100%);
+	.theme-dark .filter-label {
+		color: #aaa;
 	}
 
-	.theme-green .message.user {
-		background: linear-gradient(135deg, #065f46 0%, #10b981 100%);
+	.theme-dark .empty-state {
+		color: #666;
+	}
+
+	.theme-dark .api-info {
+		color: #555;
+	}
+
+	/* オーシャンテーマ */
+	.theme-ocean .chat-header {
+		background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
+	}
+
+	.theme-ocean .message.user {
+		background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
+	}
+
+	/* サンセットテーマ */
+	.theme-sunset {
+		background: #fff5f5;
+	}
+
+	.theme-sunset .chat-header {
+		background: linear-gradient(135deg, #f97316 0%, #fb923c 100%);
+	}
+
+	.theme-sunset .message.user {
+		background: linear-gradient(135deg, #f97316 0%, #fb923c 100%);
+	}
+
+	.theme-sunset .chat-messages {
+		background: #fff7ed;
+	}
+
+	/* フォレストテーマ */
+	.theme-forest {
+		background: #f0fdf4;
+	}
+
+	.theme-forest .chat-header {
+		background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+	}
+
+	.theme-forest .message.user {
+		background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+	}
+
+	.theme-forest .chat-messages {
+		background: #f0fdf4;
+	}
+
+	.theme-forest .message.assistant {
+		background: #dcfce7;
+		color: #166534;
+	}
+
+	/* パープルテーマ */
+	.theme-purple {
+		background: #faf5ff;
+	}
+
+	.theme-purple .chat-header {
+		background: linear-gradient(135deg, #9333ea 0%, #a855f7 100%);
+	}
+
+	.theme-purple .message.user {
+		background: linear-gradient(135deg, #9333ea 0%, #a855f7 100%);
+	}
+
+	.theme-purple .chat-messages {
+		background: #faf5ff;
+	}
+
+	.theme-purple .message.assistant {
+		background: #f3e8ff;
+		color: #6b21a8;
 	}
 
 	.main-content {
@@ -455,7 +525,7 @@
 	}
 
 	.message-content {
-		font-size: 0.95rem;
+		font-size: var(--font-size, 16px);
 		line-height: 1.5;
 	}
 
@@ -510,7 +580,7 @@
 		padding: 12px 16px;
 		border: 2px solid #e0e0e0;
 		border-radius: 8px;
-		font-size: 1rem;
+		font-size: var(--font-size, 16px);
 		font-family: inherit;
 		outline: none;
 		transition: border-color 0.2s;
@@ -531,7 +601,7 @@
 		color: white;
 		border: none;
 		border-radius: 8px;
-		font-size: 1rem;
+		font-size: var(--font-size, 16px);
 		font-weight: 600;
 		cursor: pointer;
 		transition: transform 0.2s;
