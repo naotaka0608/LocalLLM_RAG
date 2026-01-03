@@ -28,6 +28,32 @@
 	let theme = $derived($settingsStore.theme);
 	let fontSize = $derived($settingsStore.fontSize);
 
+	// キャラクター設定名のマッピング
+	const characterNames: Record<string, string> = {
+		none: '',
+		samurai: '侍',
+		gal: 'ギャル',
+		kansai: '関西人',
+		cat: '猫',
+		moe: '萌えキャラ'
+	};
+
+	// アシスタント表示名を取得（現在の設定用）
+	let assistantDisplayName = $derived(() => {
+		const preset = $settingsStore.character_preset;
+		const characterName = characterNames[preset] || '';
+		return characterName ? `アシスタント（${characterName}）` : 'アシスタント';
+	});
+
+	// メッセージごとのアシスタント表示名を取得
+	function getAssistantDisplayName(characterPreset?: string): string {
+		if (!characterPreset || characterPreset === 'none') {
+			return 'アシスタント';
+		}
+		const characterName = characterNames[characterPreset] || '';
+		return characterName ? `アシスタント（${characterName}）` : 'アシスタント';
+	}
+
 	// 初回読み込み時に新しいチャットを作成
 	onMount(() => {
 		if ($chatStore.chats.length === 0) {
@@ -74,6 +100,9 @@
 	async function sendMessage() {
 		if (!inputMessage.trim() || isGenerating || !chatId) return;
 
+		// 現在のキャラクター設定を取得
+		const currentCharacterPreset = $settingsStore.character_preset;
+
 		// ユーザーメッセージを追加
 		const userQuestion = inputMessage;
 		console.log('[DEBUG] Sending question:', userQuestion);
@@ -82,11 +111,20 @@
 		isGenerating = true;
 		currentStreamingMessage = '';
 
+		// 速度情報をリセット
+		currentResponseTime = 0;
+		currentGenerationTime = 0;
+		currentSpeed = 0;
+
 		// AbortControllerを作成
 		abortController = new AbortController();
 
-		// アシスタントメッセージのプレースホルダーを追加
-		chatStore.addMessage(chatId, { role: 'assistant', content: '' });
+		// アシスタントメッセージのプレースホルダーを追加（キャラクター設定も保存）
+		chatStore.addMessage(chatId, {
+			role: 'assistant',
+			content: '',
+			characterPreset: currentCharacterPreset
+		});
 
 		try {
 			// 設定を取得
@@ -235,7 +273,7 @@
 			{#each messages as message, index}
 				<div class="message {message.role}">
 					<div class="message-role">
-						{message.role === 'user' ? 'あなた' : 'AI'}
+						{message.role === 'user' ? 'あなた' : getAssistantDisplayName(message.characterPreset)}
 					</div>
 					<div class="message-content">
 						{#if message.role === 'user'}
@@ -561,10 +599,10 @@
 	}
 
 	.message-role {
-		font-size: 0.75rem;
-		font-weight: 600;
-		margin-bottom: 5px;
-		opacity: 0.8;
+		font-size: 0.85rem;
+		font-weight: 700;
+		margin-bottom: 6px;
+		opacity: 0.9;
 	}
 
 	.message-content {
