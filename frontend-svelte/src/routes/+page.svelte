@@ -262,16 +262,28 @@
 							{message.content}
 						{:else if index === messages.length - 1 && isGenerating}
 							<!-- 生成中のメッセージ -->
-							<!-- 速度情報（生成中） -->
-							{#if currentResponseTime > 0}
-								<div class="speed-info generating">
-									応答時間: {currentResponseTime.toFixed(1)}秒 | 生成中: {currentGenerationTime.toFixed(
-										1
-									)}秒 ({currentSpeed.toFixed(1)} 文字/秒)
+							{#if !message.content}
+								<!-- 回答待機中（まだテキストが来ていない） -->
+								<div class="loading-indicator">
+									<div class="loading-dots">
+										<span></span>
+										<span></span>
+										<span></span>
+									</div>
+									<span class="loading-text">回答生成中...</span>
 								</div>
+							{:else}
+								<!-- 速度情報（生成中） -->
+								{#if currentResponseTime > 0}
+									<div class="speed-info generating">
+										応答時間: {currentResponseTime.toFixed(1)}秒 | 生成中: {currentGenerationTime.toFixed(
+											1
+										)}秒 ({currentSpeed.toFixed(1)} 文字/秒)
+									</div>
+								{/if}
+								<MarkdownRenderer content={message.content} />
+								<span class="cursor">▊</span>
 							{/if}
-							<MarkdownRenderer content={message.content} />
-							<span class="cursor">▊</span>
 						{:else}
 							<!-- アシスタントメッセージはマークダウン表示 -->
 							<!-- 速度情報（完了） -->
@@ -709,5 +721,64 @@
 	.speed-info.completed {
 		background: #e8f5e9;
 		color: #2e7d32;
+	}
+
+	/* ローディングインジケーター */
+	.loading-indicator {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		padding: 8px 0;
+	}
+
+	.loading-dots {
+		display: flex;
+		gap: 6px;
+	}
+
+	.loading-dots span {
+		width: 8px;
+		height: 8px;
+		background: #667eea;
+		border-radius: 50%;
+		animation: loading-bounce 1.4s infinite ease-in-out both;
+	}
+
+	.loading-dots span:nth-child(1) {
+		animation-delay: -0.32s;
+	}
+
+	.loading-dots span:nth-child(2) {
+		animation-delay: -0.16s;
+	}
+
+	@keyframes loading-bounce {
+		0%,
+		80%,
+		100% {
+			transform: scale(0);
+			opacity: 0.5;
+		}
+		40% {
+			transform: scale(1);
+			opacity: 1;
+		}
+	}
+
+	.loading-text {
+		color: #667eea;
+		font-size: 0.9rem;
+		font-weight: 500;
+		animation: loading-pulse 1.5s ease-in-out infinite;
+	}
+
+	@keyframes loading-pulse {
+		0%,
+		100% {
+			opacity: 0.6;
+		}
+		50% {
+			opacity: 1;
+		}
 	}
 </style>

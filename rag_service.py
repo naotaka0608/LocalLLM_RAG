@@ -835,6 +835,14 @@ class RAGService:
 
         # ドキュメントがない場合
         if len(all_docs_with_scores) == 0:
+            # タグフィルターが指定されている場合は、情報がないことを明示的に伝える
+            if tags and len(tags) > 0:
+                tag_list = "、".join(tags)
+                no_info_message = f"申し訳ございません。指定されたタグ「{tag_list}」に関連する情報が見つかりませんでした。\n\n別のタグを選択するか、タグフィルターを解除してお試しください。"
+                yield no_info_message
+                return
+
+            # タグフィルターなしで情報がない場合は、通常通りLLMに質問
             # システムプロンプト（キャラクター設定）がある場合はそれを使用
             system_role = system_prompt if system_prompt else "あなたは親切で知識豊富なアシスタントです。"
 
@@ -896,11 +904,22 @@ class RAGService:
         # コンテキストの構築
         context = "\n\n".join([doc.page_content for doc, _score in top_docs_with_scores])
 
+        # タグフィルター適用時の制約メッセージ
+        tag_constraint = ""
+        if tags and len(tags) > 0:
+            tag_list = "、".join(tags)
+            tag_constraint = f"""
+【重要な制約】
+現在、タグ「{tag_list}」でフィルタリングされています。
+参照情報に質問の答えがない場合は、「申し訳ございません。指定されたタグ『{tag_list}』に関連する情報からは、ご質問にお答えできる情報が見つかりませんでした。」と回答してください。
+他のタグの情報や一般知識で補完することは絶対に禁止です。
+"""
+
         # システムプロンプトがある場合はプロンプトをカスタマイズ
         if system_prompt:
             # カスタムプロンプトテンプレートを使用（キャラクター指示を参照情報の後に配置）
             custom_prompt_template = f"""以下の参照情報を使って、質問に答えてください。
-
+{tag_constraint}
 参照情報:
 {{context}}
 
@@ -914,7 +933,18 @@ class RAGService:
             prompt_text = custom_prompt_template.format(context=context, question=question)
         else:
             # デフォルトのプロンプトを使用
-            prompt_text = self.prompt.format(context=context, question=question)
+            if tag_constraint:
+                default_prompt_with_constraint = f"""以下の参照情報を使って、質問に答えてください。
+{tag_constraint}
+参照情報:
+{{context}}
+
+質問: {{question}}
+
+回答:"""
+                prompt_text = default_prompt_with_constraint.format(context=context, question=question)
+            else:
+                prompt_text = self.prompt.format(context=context, question=question)
 
         logger.info(f"Final prompt being sent to LLM:\n{prompt_text[:500]}...")
         async for chunk in self._stream_ollama_direct(prompt_text, model_name, **llm_params):
