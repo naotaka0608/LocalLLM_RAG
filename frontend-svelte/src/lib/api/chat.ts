@@ -1,6 +1,6 @@
 // FastAPI APIとの通信モジュール
 
-const API_BASE_URL = 'http://localhost:8000';
+import { API_BASE_URL } from '$lib/config/constants';
 
 export interface SourceInfo {
 	source: string;
@@ -34,6 +34,24 @@ export interface QueryRequest {
 	top_p?: number;
 	repeat_penalty?: number;
 	num_predict?: number;
+}
+
+/**
+ * チャットリクエストのパラメータ（設定画面から送信される値）
+ */
+export interface ChatRequestParams {
+	use_rag: boolean;
+	use_hybrid_search: boolean;
+	query_expansion: boolean;
+	temperature: number;
+	top_p: number;
+	repeat_penalty: number;
+	num_predict: number;
+	document_count: number;
+	search_multiplier: number;
+	model?: string;
+	system_prompt?: string;
+	tags?: string[];
 }
 
 /**

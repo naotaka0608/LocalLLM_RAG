@@ -9,6 +9,7 @@
 		type Document,
 		type DocumentStats
 	} from '$lib/api/documents';
+	import { ERROR_MESSAGES } from '$lib/config/constants';
 
 	let isOpen = false;
 	let stats: DocumentStats | null = null;
@@ -197,7 +198,7 @@
 			await loadTags();
 			await loadDocuments();
 		} catch (error) {
-			alert(`削除に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`);
+			alert(`${ERROR_MESSAGES.DELETE_FAILED}: ${error instanceof Error ? error.message : ERROR_MESSAGES.UNKNOWN_ERROR}`);
 		}
 	}
 
@@ -217,7 +218,7 @@
 			await loadDocuments();
 		} catch (error) {
 			alert(
-				`データベースのクリアに失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`
+				`${ERROR_MESSAGES.CLEAR_FAILED}: ${error instanceof Error ? error.message : ERROR_MESSAGES.UNKNOWN_ERROR}`
 			);
 		}
 	}

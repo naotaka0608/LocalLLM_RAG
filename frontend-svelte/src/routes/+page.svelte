@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { sendQuestionStream, processStream } from '$lib/api/chat';
+	import { sendQuestionStream, processStream, type ChatRequestParams } from '$lib/api/chat';
 	import { chatStore, currentChat } from '$lib/stores/chatStore';
 	import { settingsStore } from '$lib/stores/settingsStore';
 	import Sidebar from '$lib/components/Sidebar.svelte';
@@ -9,6 +9,8 @@
 	import SettingsPanel from '$lib/components/SettingsPanel.svelte';
 	import ModelSettingsPanel from '$lib/components/ModelSettingsPanel.svelte';
 	import DocumentManager from '$lib/components/DocumentManager.svelte';
+	import { getAssistantDisplayName } from '$lib/utils/character';
+	import { ERROR_MESSAGES } from '$lib/config/constants';
 
 	let inputMessage = $state('');
 	let isGenerating = $state(false);
@@ -28,31 +30,10 @@
 	let theme = $derived($settingsStore.theme);
 	let fontSize = $derived($settingsStore.fontSize);
 
-	// キャラクター設定名のマッピング
-	const characterNames: Record<string, string> = {
-		none: '',
-		samurai: '侍',
-		gal: 'ギャル',
-		kansai: '関西人',
-		cat: '猫',
-		moe: '萌えキャラ'
-	};
-
 	// アシスタント表示名を取得（現在の設定用）
 	let assistantDisplayName = $derived(() => {
-		const preset = $settingsStore.character_preset;
-		const characterName = characterNames[preset] || '';
-		return characterName ? `アシスタント（${characterName}）` : 'アシスタント';
+		return getAssistantDisplayName($settingsStore.character_preset);
 	});
-
-	// メッセージごとのアシスタント表示名を取得
-	function getAssistantDisplayName(characterPreset?: string): string {
-		if (!characterPreset || characterPreset === 'none') {
-			return 'アシスタント';
-		}
-		const characterName = characterNames[characterPreset] || '';
-		return characterName ? `アシスタント（${characterName}）` : 'アシスタント';
-	}
 
 	// 初回読み込み時に新しいチャットを作成
 	onMount(() => {
@@ -92,7 +73,7 @@
 
 		// 中断されたメッセージに注釈を追加
 		if (chatId && currentStreamingMessage) {
-			chatStore.updateLastMessage(chatId, currentStreamingMessage + '\n\n*[生成が停止されました]*');
+			chatStore.updateLastMessage(chatId, currentStreamingMessage + `\n\n*${ERROR_MESSAGES.GENERATION_STOPPED}*`);
 		}
 		currentStreamingMessage = '';
 	}
@@ -130,8 +111,8 @@
 			// 設定を取得
 			const settings = $settingsStore;
 
-			// APIリクエストパラメータを構築（空の値は送信しない）
-			const requestParams: any = {
+			// APIリクエストパラメータを構築
+			const requestParams: ChatRequestParams = {
 				use_rag: settings.use_rag,
 				use_hybrid_search: settings.use_hybrid_search,
 				query_expansion: settings.query_expansion,
@@ -213,7 +194,7 @@
 			if (chatId) {
 				chatStore.updateLastMessage(
 					chatId,
-					`エラーが発生しました: ${error instanceof Error ? error.message : '不明なエラー'}\n\nFastAPIサーバーが起動しているか確認してください（http://localhost:8000）`
+					`エラーが発生しました: ${error instanceof Error ? error.message : ERROR_MESSAGES.UNKNOWN_ERROR}\n\n${ERROR_MESSAGES.SERVER_NOT_RUNNING}`
 				);
 			}
 			isGenerating = false;
