@@ -3,14 +3,8 @@
 const API_BASE_URL = 'http://localhost:8000';
 
 export interface Document {
-	id: string;
-	content: string;
-	metadata: {
-		source?: string;
-		tags?: string[];
-		timestamp?: string;
-		[key: string]: any;
-	};
+	filename: string;
+	tags: string[];
 }
 
 export interface DocumentStats {
@@ -38,20 +32,12 @@ export async function getDocuments(
 	offset: number = 0,
 	tags?: string[]
 ): Promise<Document[]> {
-	const params = new URLSearchParams({
-		limit: limit.toString(),
-		offset: offset.toString()
-	});
-
-	if (tags && tags.length > 0) {
-		tags.forEach((tag) => params.append('tags', tag));
-	}
-
-	const response = await fetch(`${API_BASE_URL}/documents?${params}`);
+	const response = await fetch(`${API_BASE_URL}/documents/details`);
 	if (!response.ok) {
 		throw new Error(`API Error: ${response.status} ${response.statusText}`);
 	}
-	return response.json();
+	const data = await response.json();
+	return data.documents || [];
 }
 
 /**
@@ -83,12 +69,12 @@ export async function uploadFile(
 	tags: string[] = []
 ): Promise<{ message: string; chunks_created: number }> {
 	const formData = new FormData();
-	formData.append('file', file);
+	formData.append('files', file);
 	if (tags.length > 0) {
-		formData.append('tags', JSON.stringify(tags));
+		formData.append('tags', tags.join(','));
 	}
 
-	const response = await fetch(`${API_BASE_URL}/documents/upload`, {
+	const response = await fetch(`${API_BASE_URL}/upload`, {
 		method: 'POST',
 		body: formData
 	});
@@ -103,8 +89,8 @@ export async function uploadFile(
 /**
  * ドキュメントを削除
  */
-export async function deleteDocument(documentId: string): Promise<{ message: string }> {
-	const response = await fetch(`${API_BASE_URL}/documents/${documentId}`, {
+export async function deleteDocument(filename: string): Promise<{ message: string }> {
+	const response = await fetch(`${API_BASE_URL}/documents/${encodeURIComponent(filename)}`, {
 		method: 'DELETE'
 	});
 
@@ -132,7 +118,7 @@ export async function searchByTags(tags: string[]): Promise<Document[]> {
  * データベースをクリア（開発用）
  */
 export async function clearDatabase(): Promise<{ message: string }> {
-	const response = await fetch(`${API_BASE_URL}/documents/clear`, {
+	const response = await fetch(`${API_BASE_URL}/documents`, {
 		method: 'DELETE'
 	});
 

@@ -186,14 +186,15 @@
 		}
 	}
 
-	async function handleDeleteDocument(docId: string, source?: string) {
-		if (!confirm(`ドキュメント "${source || docId}" を削除しますか?`)) {
+	async function handleDeleteDocument(filename: string) {
+		if (!confirm(`ドキュメント "${filename}" を削除しますか?`)) {
 			return;
 		}
 
 		try {
-			await deleteDocument(docId);
+			await deleteDocument(filename);
 			await loadStats();
+			await loadTags();
 			await loadDocuments();
 		} catch (error) {
 			alert(`削除に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`);
@@ -212,17 +213,13 @@
 		try {
 			await clearDatabase();
 			await loadStats();
+			await loadTags();
 			await loadDocuments();
 		} catch (error) {
 			alert(
 				`データベースのクリアに失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`
 			);
 		}
-	}
-
-	function truncate(text: string, maxLength: number): string {
-		if (text.length <= maxLength) return text;
-		return text.substring(0, maxLength) + '...';
 	}
 </script>
 
@@ -363,17 +360,14 @@
 						{#each documents as doc}
 							<div class="document-item">
 								<div class="document-header">
-									<span class="document-source">{doc.metadata.source || 'Unknown'}</span>
-									<button class="delete-button" on:click={() => handleDeleteDocument(doc.id, doc.metadata.source)}>
+									<span class="document-source">{doc.filename}</span>
+									<button class="delete-button" on:click={() => handleDeleteDocument(doc.filename)}>
 										削除
 									</button>
 								</div>
-								<div class="document-content">
-									{truncate(doc.content, 150)}
-								</div>
-								{#if doc.metadata.tags && doc.metadata.tags.length > 0}
+								{#if doc.tags && doc.tags.length > 0}
 									<div class="document-tags">
-										{#each doc.metadata.tags as tag}
+										{#each doc.tags as tag}
 											<span class="tag-badge">{tag}</span>
 										{/each}
 									</div>
