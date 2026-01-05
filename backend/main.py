@@ -19,8 +19,8 @@ app.add_middleware(
 )
 
 # 静的ファイルのマウント（CSS, JS）
-app.mount("/css", StaticFiles(directory="frontend/css"), name="css")
-app.mount("/js", StaticFiles(directory="frontend/js"), name="js")
+app.mount("/css", StaticFiles(directory="../frontend/css"), name="css")
+app.mount("/js", StaticFiles(directory="../frontend/js"), name="js")
 
 # RAGサービスのインスタンス化
 rag_service = RAGService()
@@ -85,7 +85,7 @@ class ModelListResponse(BaseModel):
 @app.get("/")
 async def read_root():
     """HTMLフロントエンドを返す"""
-    return FileResponse("frontend/index.html")
+    return FileResponse("../frontend/index.html")
 
 
 @app.post("/upload")
@@ -118,8 +118,8 @@ async def upload_documents(
                 )
 
             # ファイルを一時保存
-            file_path = f"./uploads/{file.filename}"
-            os.makedirs("./uploads", exist_ok=True)
+            file_path = f"../uploads/{file.filename}"
+            os.makedirs("../uploads", exist_ok=True)
 
             with open(file_path, "wb") as f:
                 content = await file.read()

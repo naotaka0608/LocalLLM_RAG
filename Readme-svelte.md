@@ -66,17 +66,25 @@
 
 2. **Python仮想環境の作成と依存関係のインストール**
    ```bash
+   # プロジェクトルートで実行
    uv venv
+   cd backend
    uv pip install -e .
    ```
 
 3. **バックエンドの起動**
    ```bash
+   # backendディレクトリで実行
+   cd backend
+
    # Windows
-   .venv\Scripts\python.exe main.py
+   ..\.venv\Scripts\python.exe main.py
 
    # macOS/Linux
-   .venv/bin/python main.py
+   ../venv/bin/python main.py
+
+   # または起動スクリプトを使用
+   ./start.sh
    ```
 
    サーバーは `http://localhost:8000` で起動します。
@@ -106,8 +114,14 @@
 
 1. **ターミナル1: バックエンド起動**
    ```bash
-   # プロジェクトルートディレクトリで
-   .venv\Scripts\python.exe main.py
+   # backendディレクトリで
+   cd backend
+
+   # Windows
+   ..\.venv\Scripts\python.exe main.py
+
+   # macOS/Linux
+   ./start.sh
    ```
 
 2. **ターミナル2: フロントエンド起動**
@@ -156,9 +170,15 @@ npm run preview
 
 ```
 LocalLLM_RAG/
-├── main.py                      # バックエンドエントリーポイント
-├── rag_service.py               # RAGサービス実装
-├── pyproject.toml               # Python依存関係定義
+├── backend/                     # バックエンド
+│   ├── main.py                  # FastAPIエントリーポイント
+│   ├── rag_service.py           # RAGサービス実装
+│   ├── config.py                # 設定ファイル
+│   ├── logger.py                # ログ設定
+│   ├── exceptions.py            # 例外定義
+│   ├── pyproject.toml           # Python依存関係定義
+│   ├── uv.lock                  # 依存関係ロックファイル
+│   └── start.sh                 # 起動スクリプト
 ├── frontend-svelte/             # SvelteKitフロントエンド
 │   ├── src/
 │   │   ├── routes/              # ページルート
@@ -167,9 +187,11 @@ LocalLLM_RAG/
 │   │       ├── api/             # API通信層
 │   │       ├── components/      # 再利用可能コンポーネント
 │   │       ├── stores/          # Svelteストア（状態管理）
-│   │       └── utils/           # ユーティリティ関数
+│   │       ├── utils/           # ユーティリティ関数
+│   │       └── config/          # 定数・設定
 │   ├── package.json             # フロントエンド依存関係
 │   └── vite.config.ts           # Vite設定
+├── .venv/                       # Python仮想環境（共有）
 ├── chroma_db/                   # ベクトルDB（自動生成）
 └── uploads/                     # アップロードファイル（自動生成）
 ```

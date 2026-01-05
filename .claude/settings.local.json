@@ -32,7 +32,10 @@
       "Bash(.....venvScriptspython.exe -m http.server 8080)",
       "Bash(.venvScriptspython.exe test_character_api.py)",
       "Bash(timeout:*)",
-      "Bash(../.venv/Scripts/python.exe:*)"
+      "Bash(../.venv/Scripts/python.exe:*)",
+      "Bash(mv:*)",
+      "Bash(chmod:*)",
+      "Bash(cat:*)"
     ]
   }
 }
