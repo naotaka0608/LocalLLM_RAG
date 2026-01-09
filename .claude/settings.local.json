@@ -35,7 +35,8 @@
       "Bash(../.venv/Scripts/python.exe:*)",
       "Bash(mv:*)",
       "Bash(chmod:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(rm:*)"
     ]
   }
 }
