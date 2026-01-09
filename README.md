@@ -1,224 +1,272 @@
-# Local LLM RAG System
+# LocalLLM RAG System
 
-OllamaとLangChainを使用したローカルLLMのRAG（Retrieval-Augmented Generation）システムです。プライバシーを保護しながら、ドキュメントベースのAIチャットボットを構築できます。
+ローカルLLMとRAG（Retrieval-Augmented Generation）を活用した、プライバシー重視のドキュメント検索・質問応答システムです。
 
-## 主な特徴
+![](https://img.shields.io/badge/Python-3.10+-blue.svg)
+![](https://img.shields.io/badge/SvelteKit-5-orange.svg)
+![](https://img.shields.io/badge/FastAPI-0.104+-green.svg)
+![](https://img.shields.io/badge/Docker-Ready-2496ED.svg)
 
-- 🔒 **完全ローカル実行** - インターネット接続不要、データは外部に送信されません
-- 📚 **複数ファイル対応** - PDF, TXT, Markdown, CSVをサポート
-- 🔍 **ハイブリッド検索** - BM25 + ベクトル検索で高精度な情報取得
-- 💬 **会話履歴保持** - 文脈を理解した自然な対話
-- ⚡ **リアルタイム表示** - ストリーミングで1文字ずつ回答を表示
-- 🎛️ **詳細なパラメータ制御** - Ollamaの全パラメータに対応
-- 📱 **レスポンシブUI** - PC/タブレット/スマホ対応
+## 概要
 
-## クイックスタート
+このシステムは以下の機能を提供します：
 
-### 1. Ollamaのインストール
+- **ローカルLLMによる質問応答**: Ollamaを使用した完全ローカル環境での自然言語処理
+- **RAG機能**: アップロードしたドキュメント（PDF、Markdown等）を参照した回答生成
+- **キャラクター設定**: 侍、ギャル、関西人、猫、萌えキャラなど、個性的なキャラクターで応答
+- **ドキュメント管理**: ファイルアップロード、削除、検索機能
+- **チャット履歴管理**: 複数のチャットセッションを保存・切り替え可能
+- **パフォーマンス計測**: 応答時間、生成時間、トークン生成速度の表示
+- **モデル設定**: Temperature、Top-p、最大トークン数などの詳細設定
 
-[ollama.com](https://ollama.com/) からダウンロードしてインストール
+## 技術スタック
+
+### バックエンド
+- **Python 3.10+**
+- **FastAPI**: RESTful API
+- **LangChain**: LLM統合フレームワーク
+- **ChromaDB**: ベクトルデータベース
+- **Ollama**: ローカルLLMランタイム
+- **uv**: 高速Pythonパッケージマネージャー
+
+### フロントエンド
+- **SvelteKit**: フルスタックフレームワーク
+- **Svelte 5**: 最新のリアクティブフレームワーク（Runes API）
+- **TypeScript**: 型安全な開発環境
+- **Vite**: 高速ビルドツール
+
+### インフラ・デプロイ
+- **Docker & Docker Compose**: コンテナ化とオーケストレーション
+- **Nginx**: リバースプロキシ、SSL/TLS対応
+- **Fail2Ban**: 不正アクセス防止
+- **Let's Encrypt**: 無料SSL証明書
+
+## インストール方法
+
+### 前提条件
+
+1. **Ollamaのインストール**
+   - [Ollama公式サイト](https://ollama.com/)からダウンロード・インストール
+   - モデルをダウンロード（例: `ollama pull llama3`）
+
+2. **Node.js のインストール**
+   - Node.js 18.x以上が必要
+   - [Node.js公式サイト](https://nodejs.org/)からダウンロード
+
+3. **Python 3.10以上のインストール**
+   - [Python公式サイト](https://www.python.org/)からダウンロード
+
+4. **uv のインストール**
+   ```bash
+   # Windows (PowerShell)
+   powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+   # macOS/Linux
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+
+### バックエンドのセットアップ
+
+1. **リポジトリのクローン**
+   ```bash
+   git clone <repository-url>
+   cd LocalLLM_RAG
+   ```
+
+2. **Python仮想環境の作成と依存関係のインストール**
+   ```bash
+   # プロジェクトルートで実行
+   uv venv
+   cd backend
+   uv pip install -e .
+   ```
+
+3. **バックエンドの起動**
+   ```bash
+   # backendディレクトリで実行
+   cd backend
+
+   # Windows
+   ..\.venv\Scripts\python.exe main.py
+
+   # macOS/Linux
+   ../venv/bin/python main.py
+
+   # または起動スクリプトを使用
+   ./start.sh
+   ```
+
+   サーバーは `http://localhost:8000` で起動します。
+
+### フロントエンドのセットアップ
+
+1. **フロントエンドディレクトリに移動**
+   ```bash
+   cd frontend-svelte
+   ```
+
+2. **依存関係のインストール**
+   ```bash
+   npm install
+   ```
+
+3. **開発サーバーの起動**
+   ```bash
+   npm run dev
+   ```
+
+   フロントエンドは `http://localhost:5173` で起動します。
+
+## 起動方法
+
+### 通常起動（開発環境）
+
+1. **ターミナル1: バックエンド起動**
+   ```bash
+   # backendディレクトリで
+   cd backend
+
+   # Windows
+   ..\.venv\Scripts\python.exe main.py
+
+   # macOS/Linux
+   ./start.sh
+   ```
+
+2. **ターミナル2: フロントエンド起動**
+   ```bash
+   cd frontend-svelte
+   npm run dev
+   ```
+
+3. **ブラウザでアクセス**
+   - フロントエンド: http://localhost:5173
+   - バックエンドAPI: http://localhost:8000
+   - API ドキュメント: http://localhost:8000/docs
+
+### 本番ビルド
 
 ```bash
-# モデルのダウンロード
-ollama pull llama3.2
-ollama pull nomic-embed-text
+# フロントエンドのビルド
+cd frontend-svelte
+npm run build
+
+# ビルド結果のプレビュー
+npm run preview
 ```
 
-### 2. プロジェクトのセットアップ
+## 使い方
 
-```bash
-# 依存関係のインストール
-uv sync
+1. **ドキュメントのアップロード**
+   - サイドバーの「ドキュメント管理」からPDFやMarkdownファイルをアップロード
+   - アップロードされたドキュメントは自動的にベクトル化されます
 
-# サーバーの起動
-uv run python main.py
-```
+2. **キャラクター設定**
+   - 右上の設定アイコンから「キャラクター設定」を選択
+   - 侍、ギャル、関西人、猫、萌えキャラから選択可能
 
-### 3. ブラウザでアクセス
+3. **質問の送信**
+   - チャット入力欄に質問を入力
+   - RAGモードが有効な場合、アップロードしたドキュメントを参照した回答が返されます
+   - 参照元のドキュメント情報や類似度スコアも表示されます
 
-```
-http://localhost:8000
-```
+4. **モデル設定のカスタマイズ**
+   - Temperature: 回答の創造性を調整（0.0〜1.0）
+   - Top-p: トークン選択の多様性を調整
+   - 最大トークン数: 応答の最大長を設定
 
-## 主要機能
-
-### RAG機能
-- **クエリ拡張** - LLMが関連キーワードを自動生成
-- **ハイブリッド検索** - BM25（キーワード）とベクトル（意味）の組み合わせ
-- **スコアフィルタリング** - 関連性の高い情報のみを使用
-- **重複排除** - 多様な情報源から回答を生成
-
-### チャット機能
-- **会話履歴** - 過去10往復を記憶し、文脈を理解
-- **ストリーミング** - リアルタイムで回答を表示
-- **速度表示** - 生成速度（文字/秒）と総時間を表示
-- **参照元表示** - 情報源とスコアを表示
-- **停止ボタン** - 生成途中で停止可能
-
-### 便利機能
-- **コピーボタン** - 回答をワンクリックでコピー
-- **再生成** - 同じ質問で再度回答を生成
-- **ドキュメントプレビュー** - 参照元をクリックで全文表示
-- **会話管理** - サイドバーで過去のチャットを管理
-
-### パラメータ調整
-
-#### 主要パラメータ
-- **Temperature** (0.0-2.0) - 回答のランダム性
-- **Document Count** - 参照するドキュメント数
-- **Top-P** - サンプリング確率の累積閾値
-- **Repeat Penalty** - 繰り返しの抑制
-
-#### 詳細パラメータ（NEW!）
-- **Min-P** - 最小確率閾値（Top-Pより効果的）
-- **Presence/Frequency Penalty** - 新トピック促進、繰り返し防止
-- **Num Thread/GPU** - CPU/GPU使用量の制御
-- **Typical P, TFS-Z** - 高度なサンプリング制御
-- **Repeat Last N** - ペナルティ適用範囲
-- **Penalize Newline** - 改行の制御
-
-全てのパラメータにヘルプ（?アイコン）付き
-
-## API エンドポイント
-
-| エンドポイント | 説明 |
-|---------------|------|
-| `GET /` | フロントエンド |
-| `POST /upload` | ドキュメントアップロード |
-| `POST /query` | RAG回答生成（非ストリーミング） |
-| `POST /query/stream` | RAG回答生成（ストリーミング） |
-| `GET /documents` | ドキュメント一覧 |
-| `DELETE /documents/{filename}` | ドキュメント削除 |
-| `GET /document/content/{filename}` | ドキュメント内容取得 |
-| `GET /models` | 利用可能なモデル一覧 |
-| `GET /health` | ヘルスチェック |
-
-## プロジェクト構造
+## ディレクトリ構成
 
 ```
-.
-├── main.py              # FastAPIアプリケーション
-├── rag_service.py       # RAG機能の実装
-├── frontend/
-│   ├── index.html       # UI
-│   ├── css/styles.css   # スタイル
-│   └── js/script.js     # ロジック
-├── pyproject.toml       # 依存関係
-├── uploads/             # アップロードファイル（自動作成）
-└── chroma_db/           # ベクトルDB（自動作成）
-```
-
-## カスタマイズ
-
-### モデルの変更
-
-```python
-# rag_service.py
-rag_service = RAGService(
-    model_name="llama3.2",  # 任意のOllamaモデル
-    embedding_model="nomic-embed-text"
-)
-```
-
-### チャンクサイズの調整
-
-```python
-# rag_service.py
-self.text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=1500,     # 大きいドキュメント向け
-    chunk_overlap=300
-)
+LocalLLM_RAG/
+├── backend/                     # バックエンド
+│   ├── main.py                  # FastAPIエントリーポイント
+│   ├── rag_service.py           # RAGサービス実装
+│   ├── config.py                # 設定ファイル
+│   ├── logger.py                # ログ設定
+│   ├── exceptions.py            # 例外定義
+│   ├── pyproject.toml           # Python依存関係定義
+│   ├── uv.lock                  # 依存関係ロックファイル
+│   └── start.sh                 # 起動スクリプト
+├── frontend-svelte/             # SvelteKitフロントエンド
+│   ├── src/
+│   │   ├── routes/              # ページルート
+│   │   │   └── +page.svelte     # メインチャットUI
+│   │   └── lib/                 # 共有ライブラリ
+│   │       ├── api/             # API通信層
+│   │       ├── components/      # 再利用可能コンポーネント
+│   │       ├── stores/          # Svelteストア（状態管理）
+│   │       ├── utils/           # ユーティリティ関数
+│   │       └── config/          # 定数・設定
+│   ├── package.json             # フロントエンド依存関係
+│   └── vite.config.ts           # Vite設定
+├── .venv/                       # Python仮想環境（共有）
+├── chroma_db/                   # ベクトルDB（自動生成）
+└── uploads/                     # アップロードファイル（自動生成）
 ```
 
 ## トラブルシューティング
 
-### Ollama接続エラー
+### Ollamaが起動しない
+- Ollamaサービスが起動しているか確認: `ollama list`
+- モデルがダウンロードされているか確認: `ollama pull llama3`
+
+### バックエンドAPIに接続できない
+- バックエンドが起動しているか確認: `http://localhost:8000/docs` にアクセス
+- ポート8000が他のアプリケーションで使用されていないか確認
+
+### フロントエンドが起動しない
+- `node_modules` を削除して再インストール: `rm -rf node_modules && npm install`
+- Node.jsのバージョンを確認: `node --version` (18.x以上必要)
+
+## 本番環境へのデプロイ
+
+### Docker Composeを使用したデプロイ
+
 ```bash
-# Ollamaが起動しているか確認
-ollama list
+# Dockerイメージをビルド
+docker compose build
+
+# サービスを起動
+docker compose up -d
+
+# ログを確認
+docker compose logs -f
 ```
 
-### メモリ不足
-- 軽量モデルを使用: `ollama pull llama3.2:1b`
-- チャンクサイズを削減
-- 検索ドキュメント数を減らす
+### クラウドサーバー（Vultr/AWS/GCP等）へのデプロイ
 
-### 別PCからアクセスできない
-1. ファイアウォールでポート8000を許可
-   ```powershell
-   # Windows
-   New-NetFirewallRule -DisplayName "RAG System" -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow
-   ```
-2. サーバーのIPアドレスで接続: `http://192.168.x.x:8000`
+詳細な手順は [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) を参照してください。
 
-### 回答精度が低い
-1. **ハイブリッド検索**を有効化（デフォルトON）
-2. **Document Count**を増やす（10→15）
-3. より大きなモデルを使用
-4. チャンクサイズを調整
+**主な手順**:
+1. Ubuntu 24.04 サーバーの準備
+2. SSH設定とセキュリティ強化（鍵認証、Fail2Ban）
+3. Docker環境のセットアップ
+4. SSL証明書の取得（Let's Encrypt）
+5. Nginxリバースプロキシの設定
+6. アプリケーションのデプロイ
 
-## セキュリティ
+## セキュリティ機能
 
-⚠️ **重要な注意事項**
-- インターネットに公開しないでください（認証機能なし）
-- 信頼できるネットワーク内でのみ使用
-- 機密情報を扱う場合は特に注意
+本番環境では以下のセキュリティ対策が実装されています：
 
-## 更新履歴
+- ✅ **非rootユーザー実行**: コンテナは特権を持たないユーザーで実行
+- ✅ **リソース制限**: CPU・メモリ使用量の上限設定
+- ✅ **ファイアウォール**: UFWによるポート制限
+- ✅ **レート制限**: Nginxによる過剰なリクエスト防止
+- ✅ **SSL/TLS**: HTTPS通信の暗号化
+- ✅ **セキュリティヘッダー**: HSTS、CSP、X-Frame-Optionsなど
+- ✅ **不正アクセス防止**: Fail2Banによる自動IP遮断
 
-### v0.5.0 (2025-12-30) - 最新版
-- ✅ **Ollamaパラメータ完全対応**
-  - Min-P, Presence/Frequency Penalty, Typical P
-  - Num Thread, Num GPU, Repeat Last N
-  - Penalize Newline, TFS-Z
-  - 全パラメータにヘルプ付き
-- ✅ **便利機能追加**
-  - コピーボタン
-  - 回答の再生成
-  - ドキュメントプレビュー
-- ✅ **停止機能改善**
-  - 生成途中で停止可能
-  - 部分的な回答を保持
+## ドキュメント
 
-### v0.4.0 (2025-12-26)
-- ✅ 会話履歴保持（10往復）
-- ✅ リアルタイムストリーミング表示
-- ✅ RAG ON/OFF機能
-- ✅ モバイル対応改善
-
-### v0.3.0 (2025-12-20)
-- ✅ チャット履歴機能（LocalStorage）
-- ✅ UI/UX改善（コンパクト化）
-
-### v0.2.0 (2025-12-16)
-- ✅ ドラッグ&ドロップ対応
-- ✅ ネットワークアクセス対応
-
-### v0.1.0 (2025-12-14)
-- ✅ 初期リリース
-
-## システム要件
-
-- Python 3.10以上
-- 8GB以上のRAM推奨
-- Ollama
-
-## 技術スタック
-
-- **バックエンド**: FastAPI
-- **フロントエンド**: HTML5 + CSS3 + Vanilla JS
-- **LLM**: Ollama
-- **RAG**: LangChain v0.3.x
-- **ベクトルDB**: ChromaDB
-- **パッケージ管理**: uv
+- [パラメータ設定ガイド](PARAMETERS.md) - Ollamaパラメータの詳細説明
+- [デプロイメントガイド](DEPLOYMENT_GUIDE.md) - 本番環境へのデプロイ手順
 
 ## ライセンス
 
-MIT License
+このプロジェクトはMITライセンスの下で公開されています。
 
-## 参考資料
+## 貢献
 
-- [Ollama](https://ollama.com/)
-- [LangChain](https://python.langchain.com/)
-- [FastAPI](https://fastapi.tiangolo.com/)
-- [ChromaDB](https://www.trychroma.com/)
+バグ報告や機能リクエストは、GitHubのIssuesで受け付けています。

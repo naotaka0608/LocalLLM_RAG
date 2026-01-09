@@ -26,7 +26,7 @@ class RAGConfig:
     HYBRID_SEARCH_VECTOR_WEIGHT = 0.5  # ベクトル検索の重み（0.0-1.0）
 
     # ChromaDB設定
-    CHROMA_PERSIST_DIRECTORY = "./chroma_db"
+    CHROMA_PERSIST_DIRECTORY = "../chroma_db"
 
     # 会話履歴設定
     CHAT_HISTORY_LIMIT = 10  # 保持する会話の往復数
@@ -40,7 +40,7 @@ class RAGConfig:
     # ファイルアップロード設定
     SUPPORTED_EXTENSIONS = {'.pdf', '.txt', '.md', '.csv'}
     MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
-    UPLOAD_DIRECTORY = "./uploads"
+    UPLOAD_DIRECTORY = "../uploads"
 
     # ログ設定
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
